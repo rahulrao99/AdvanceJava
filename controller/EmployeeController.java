@@ -19,7 +19,7 @@ import com.app.service.EmployeeService;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 
 @RestController
-@RequestMapping
+@RequestMapping("/employees")
 @CrossOrigin(origins = "http://localhost:3000")
 public class EmployeeController {
 	
