@@ -1,0 +1,305 @@
+CREATE DATABASE IF NOT EXISTS vehicle_parking_db
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+USE vehicle_parking_db;
+
+-- ─────────────────────────────────────────
+-- 1. USERS
+-- ─────────────────────────────────────────
+CREATE TABLE users (
+    id            CHAR(36)        NOT NULL,
+    username      VARCHAR(100)    NOT NULL,
+    email         VARCHAR(150)    NOT NULL,
+    password_hash VARCHAR(255)    NOT NULL,
+    phone         VARCHAR(20)     DEFAULT NULL,
+    role          ENUM('ROLE_USER','ROLE_ADMIN','ROLE_LOT_MANAGER') NOT NULL DEFAULT 'ROLE_USER',
+    is_active     TINYINT(1)      NOT NULL DEFAULT 1,
+    created_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT pk_users PRIMARY KEY (id),
+    CONSTRAINT uq_users_email    UNIQUE (email),
+    CONSTRAINT uq_users_username UNIQUE (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_users_email     ON users (email);
+CREATE INDEX idx_users_role      ON users (role);
+CREATE INDEX idx_users_is_active ON users (is_active);
+
+-- ─────────────────────────────────────────
+-- 2. PARKING_LOTS
+-- ─────────────────────────────────────────
+CREATE TABLE parking_lots (
+    id            CHAR(36)        NOT NULL,
+    name          VARCHAR(150)    NOT NULL,
+    address       TEXT            NOT NULL,
+    latitude      DECIMAL(10, 7)  NOT NULL,
+    longitude     DECIMAL(10, 7)  NOT NULL,
+    total_levels  INT             NOT NULL DEFAULT 1,
+    is_active     TINYINT(1)      NOT NULL DEFAULT 1,
+    created_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT pk_parking_lots PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_parking_lots_is_active ON parking_lots (is_active);
+CREATE INDEX idx_parking_lots_location  ON parking_lots (latitude, longitude);
+
+-- ─────────────────────────────────────────
+-- 3. PARKING_LEVELS
+-- ─────────────────────────────────────────
+CREATE TABLE parking_levels (
+    id            CHAR(36)    NOT NULL,
+    lot_id        CHAR(36)    NOT NULL,
+    level_number  INT         NOT NULL,
+    label         VARCHAR(20) NOT NULL COMMENT 'e.g. G, 1, 2, B1',
+    total_spots   INT         NOT NULL DEFAULT 0,
+    CONSTRAINT pk_parking_levels PRIMARY KEY (id),
+    CONSTRAINT fk_parking_levels_lot FOREIGN KEY (lot_id)
+        REFERENCES parking_lots (id) ON DELETE CASCADE,
+    CONSTRAINT uq_level_per_lot UNIQUE (lot_id, level_number)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_parking_levels_lot_id ON parking_levels (lot_id);
+
+-- ─────────────────────────────────────────
+-- 4. PARKING_SPOTS
+-- ─────────────────────────────────────────
+CREATE TABLE parking_spots (
+    id            CHAR(36)        NOT NULL,
+    level_id      CHAR(36)        NOT NULL,
+    spot_code     VARCHAR(20)     NOT NULL COMMENT 'e.g. A-101, B-202',
+    vehicle_type  ENUM('TWO_WHEELER','FOUR_WHEELER','HEAVY_VEHICLE') NOT NULL,
+    is_occupied   TINYINT(1)      NOT NULL DEFAULT 0 COMMENT '0=Available, 1=Occupied',
+    is_reserved   TINYINT(1)      NOT NULL DEFAULT 0 COMMENT '0=Not reserved, 1=Reserved',
+    is_active     TINYINT(1)      NOT NULL DEFAULT 1,
+    updated_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT pk_parking_spots PRIMARY KEY (id),
+    CONSTRAINT fk_parking_spots_level FOREIGN KEY (level_id)
+        REFERENCES parking_levels (id) ON DELETE CASCADE,
+    CONSTRAINT uq_spot_code_per_level UNIQUE (level_id, spot_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_parking_spots_level_id     ON parking_spots (level_id);
+CREATE INDEX idx_parking_spots_is_occupied  ON parking_spots (is_occupied);
+CREATE INDEX idx_parking_spots_vehicle_type ON parking_spots (vehicle_type);
+CREATE INDEX idx_parking_spots_avail        ON parking_spots (is_occupied, vehicle_type);
+
+-- ─────────────────────────────────────────
+-- 5. ENTRY_EXIT_GATES
+-- ─────────────────────────────────────────
+CREATE TABLE entry_exit_gates (
+    id          CHAR(36)        NOT NULL,
+    lot_id      CHAR(36)        NOT NULL,
+    gate_type   ENUM('ENTRY','EXIT','BOTH') NOT NULL,
+    gate_code   VARCHAR(20)     NOT NULL COMMENT 'e.g. GATE-E1, GATE-X2',
+    latitude    DECIMAL(10, 7)  NOT NULL,
+    longitude   DECIMAL(10, 7)  NOT NULL,
+    is_active   TINYINT(1)      NOT NULL DEFAULT 1,
+    created_at  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_entry_exit_gates PRIMARY KEY (id),
+    CONSTRAINT fk_entry_exit_gates_lot FOREIGN KEY (lot_id)
+        REFERENCES parking_lots (id) ON DELETE CASCADE,
+    CONSTRAINT uq_gate_code_per_lot UNIQUE (lot_id, gate_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_gates_lot_id    ON entry_exit_gates (lot_id);
+CREATE INDEX idx_gates_type      ON entry_exit_gates (gate_type);
+CREATE INDEX idx_gates_is_active ON entry_exit_gates (is_active);
+CREATE INDEX idx_gates_location  ON entry_exit_gates (latitude, longitude);
+
+-- ─────────────────────────────────────────
+-- 6. FEE_CONFIG
+-- ─────────────────────────────────────────
+CREATE TABLE fee_config (
+    id            CHAR(36)        NOT NULL,
+    lot_id        CHAR(36)        NOT NULL,
+    vehicle_type  ENUM('TWO_WHEELER','FOUR_WHEELER','HEAVY_VEHICLE') NOT NULL,
+    rate_per_hour DECIMAL(8, 2)   NOT NULL,
+    grace_minutes INT             NOT NULL DEFAULT 15,
+    is_active     TINYINT(1)      NOT NULL DEFAULT 1,
+    created_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_fee_config PRIMARY KEY (id),
+    CONSTRAINT fk_fee_config_lot FOREIGN KEY (lot_id)
+        REFERENCES parking_lots (id) ON DELETE CASCADE,
+    CONSTRAINT uq_fee_config_lot_vehicle UNIQUE (lot_id, vehicle_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_fee_config_lot_id       ON fee_config (lot_id);
+CREATE INDEX idx_fee_config_vehicle_type ON fee_config (vehicle_type);
+
+-- ─────────────────────────────────────────
+-- 7. BOOKINGS
+-- ─────────────────────────────────────────
+CREATE TABLE bookings (
+    id              CHAR(36)        NOT NULL,
+    user_id         CHAR(36)        NOT NULL,
+    spot_id         CHAR(36)        NOT NULL,
+    status          ENUM('PENDING','CONFIRMED','ACTIVE','COMPLETED','CANCELLED','EXPIRED')
+                    NOT NULL DEFAULT 'PENDING',
+    start_time      DATETIME        NOT NULL,
+    end_time        DATETIME        DEFAULT NULL,
+    amount          DECIMAL(10, 2)  DEFAULT NULL,
+    vehicle_number  VARCHAR(20)     NOT NULL,
+    vehicle_type    ENUM('TWO_WHEELER','FOUR_WHEELER','HEAVY_VEHICLE') NOT NULL,
+    created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT pk_bookings PRIMARY KEY (id),
+    CONSTRAINT fk_bookings_user FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT fk_bookings_spot FOREIGN KEY (spot_id) REFERENCES parking_spots (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_bookings_user_id     ON bookings (user_id);
+CREATE INDEX idx_bookings_spot_id     ON bookings (spot_id);
+CREATE INDEX idx_bookings_status      ON bookings (status);
+CREATE INDEX idx_bookings_start_time  ON bookings (start_time);
+CREATE INDEX idx_bookings_vehicle_num ON bookings (vehicle_number);
+
+-- ─────────────────────────────────────────
+-- 8. VEHICLE_SESSIONS
+-- ─────────────────────────────────────────
+CREATE TABLE vehicle_sessions (
+    id               CHAR(36)        NOT NULL,
+    booking_id       CHAR(36)        NOT NULL,
+    entry_gate_id    CHAR(36)        NOT NULL,
+    exit_gate_id     CHAR(36)        DEFAULT NULL,
+    vehicle_number   VARCHAR(20)     NOT NULL,
+    entry_time       DATETIME        NOT NULL,
+    exit_time        DATETIME        DEFAULT NULL,
+    duration_minutes DECIMAL(8, 2)   DEFAULT NULL,
+    fee_charged      DECIMAL(10, 2)  DEFAULT NULL,
+    CONSTRAINT pk_vehicle_sessions PRIMARY KEY (id),
+    CONSTRAINT fk_vs_booking    FOREIGN KEY (booking_id)
+        REFERENCES bookings (id),
+    CONSTRAINT fk_vs_entry_gate FOREIGN KEY (entry_gate_id)
+        REFERENCES entry_exit_gates (id),
+    CONSTRAINT fk_vs_exit_gate  FOREIGN KEY (exit_gate_id)
+        REFERENCES entry_exit_gates (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_vs_booking_id     ON vehicle_sessions (booking_id);
+CREATE INDEX idx_vs_vehicle_number ON vehicle_sessions (vehicle_number);
+CREATE INDEX idx_vs_entry_time     ON vehicle_sessions (entry_time);
+
+-- ─────────────────────────────────────────
+-- 9. WAITLIST
+-- ─────────────────────────────────────────
+CREATE TABLE waitlist (
+    id            CHAR(36)    NOT NULL,
+    user_id       CHAR(36)    NOT NULL,
+    lot_id        CHAR(36)    NOT NULL,
+    vehicle_type  ENUM('TWO_WHEELER','FOUR_WHEELER','HEAVY_VEHICLE') NOT NULL,
+    priority      INT         NOT NULL DEFAULT 0,
+    expires_at    DATETIME    NOT NULL,
+    status        ENUM('WAITING','NOTIFIED','FULFILLED','EXPIRED','CANCELLED')
+                  NOT NULL DEFAULT 'WAITING',
+    created_at    DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_waitlist PRIMARY KEY (id),
+    CONSTRAINT fk_waitlist_user FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT fk_waitlist_lot  FOREIGN KEY (lot_id)  REFERENCES parking_lots (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_waitlist_user_id    ON waitlist (user_id);
+CREATE INDEX idx_waitlist_lot_id     ON waitlist (lot_id);
+CREATE INDEX idx_waitlist_status     ON waitlist (status);
+CREATE INDEX idx_waitlist_expires_at ON waitlist (expires_at);
+CREATE INDEX idx_waitlist_priority   ON waitlist (lot_id, vehicle_type, priority);
+
+-- ─────────────────────────────────────────
+-- 10. PAYMENTS
+-- ─────────────────────────────────────────
+CREATE TABLE payments (
+    id              CHAR(36)        NOT NULL,
+    booking_id      CHAR(36)        NOT NULL,
+    user_id         CHAR(36)        NOT NULL,
+    amount          DECIMAL(10, 2)  NOT NULL,
+    status          ENUM('PENDING','COMPLETED','FAILED','REFUNDED')
+                    NOT NULL DEFAULT 'PENDING',
+    transaction_id  VARCHAR(100)    DEFAULT NULL,
+    payment_mode    ENUM('CASH','CARD','UPI','WALLET','ONLINE')
+                    NOT NULL DEFAULT 'CASH',
+    paid_at         DATETIME        DEFAULT NULL,
+    created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_payments PRIMARY KEY (id),
+    CONSTRAINT fk_payments_booking FOREIGN KEY (booking_id) REFERENCES bookings (id),
+    CONSTRAINT fk_payments_user    FOREIGN KEY (user_id)    REFERENCES users (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_payments_booking_id     ON payments (booking_id);
+CREATE INDEX idx_payments_user_id        ON payments (user_id);
+CREATE INDEX idx_payments_status         ON payments (status);
+CREATE INDEX idx_payments_paid_at        ON payments (paid_at);
+CREATE INDEX idx_payments_transaction_id ON payments (transaction_id);
+
+-- ─────────────────────────────────────────
+-- 11. RECEIPTS
+-- ─────────────────────────────────────────
+CREATE TABLE receipts (
+    id            CHAR(36)    NOT NULL,
+    booking_id    CHAR(36)    NOT NULL,
+    session_id    CHAR(36)    DEFAULT NULL,
+    receipt_type  ENUM('ENTRY','EXIT') NOT NULL,
+    file_url      TEXT        DEFAULT NULL,
+    email_sent    TINYINT(1)  NOT NULL DEFAULT 0,
+    generated_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_receipts PRIMARY KEY (id),
+    CONSTRAINT fk_receipts_booking FOREIGN KEY (booking_id) REFERENCES bookings (id),
+    CONSTRAINT fk_receipts_session FOREIGN KEY (session_id) REFERENCES vehicle_sessions (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_receipts_booking_id   ON receipts (booking_id);
+CREATE INDEX idx_receipts_receipt_type ON receipts (receipt_type);
+CREATE INDEX idx_receipts_email_sent   ON receipts (email_sent);
+
+-- ─────────────────────────────────────────
+-- 12. NOTIFICATIONS
+-- ─────────────────────────────────────────
+CREATE TABLE notifications (
+    id            CHAR(36)     NOT NULL,
+    user_id       CHAR(36)     NOT NULL,
+    type          ENUM('BOOKING_CONFIRMED','BOOKING_CANCELLED','PAYMENT_SUCCESS',
+                       'PAYMENT_FAILED','ENTRY_RECEIPT','EXIT_RECEIPT',
+                       'WAITLIST_NOTIFIED','REMINDER') NOT NULL,
+    channel       ENUM('EMAIL','SMS','PUSH') NOT NULL DEFAULT 'EMAIL',
+    subject       VARCHAR(255) DEFAULT NULL,
+    body          TEXT         DEFAULT NULL,
+    status        ENUM('PENDING','SENT','FAILED','SKIPPED') NOT NULL DEFAULT 'PENDING',
+    scheduled_at  DATETIME     DEFAULT NULL,
+    sent_at       DATETIME     DEFAULT NULL,
+    created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_notifications PRIMARY KEY (id),
+    CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_notifications_user_id      ON notifications (user_id);
+CREATE INDEX idx_notifications_status       ON notifications (status);
+CREATE INDEX idx_notifications_type         ON notifications (type);
+CREATE INDEX idx_notifications_scheduled_at ON notifications (scheduled_at);
+
+-- ─────────────────────────────────────────
+-- 13. AUDIT_LOGS
+-- ─────────────────────────────────────────
+CREATE TABLE audit_logs (
+    id          CHAR(36)     NOT NULL,
+    user_id     CHAR(36)     DEFAULT NULL,
+    service     VARCHAR(100) NOT NULL,
+    action      VARCHAR(100) NOT NULL,
+    entity_id   VARCHAR(100) DEFAULT NULL,
+    payload     JSON         DEFAULT NULL,
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_audit_logs PRIMARY KEY (id),
+    CONSTRAINT fk_audit_logs_user FOREIGN KEY (user_id)
+        REFERENCES users (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_audit_logs_user_id    ON audit_logs (user_id);
+CREATE INDEX idx_audit_logs_service    ON audit_logs (service);
+CREATE INDEX idx_audit_logs_action     ON audit_logs (action);
+CREATE INDEX idx_audit_logs_created_at ON audit_logs (created_at);
+
+-- ═══════════════════════════════════════════
+-- END — 13 tables created
+-- Changes from v1:
+--   • users table has role ENUM directly (no user_roles table)
+--   • parking_spots uses is_occupied BOOLEAN instead of status ENUM
+-- ═══════════════════════════════════════════
