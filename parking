@@ -145,3 +145,14 @@ logging:
     com.parking.user: DEBUG
     org.springframework.security: INFO
     org.springframework.jdbc: DEBUG
+
+
+
+
+
+
+
+
+setx PATH "%PATH%;C:\Program Files\MySQL\MySQL Server 8.0\bin" /M
+
+
