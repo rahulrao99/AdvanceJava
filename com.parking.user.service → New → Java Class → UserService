@@ -1,0 +1,135 @@
+package com.parking.user.service;
+
+import com.parking.user.dto.request.LoginRequest;
+import com.parking.user.dto.request.RegisterRequest;
+import com.parking.user.dto.request.UpdateProfileRequest;
+import com.parking.user.dto.response.AuthResponse;
+import com.parking.user.dto.response.UserResponse;
+import com.parking.user.exception.ResourceAlreadyExistsException;
+import com.parking.user.exception.ResourceNotFoundException;
+import com.parking.user.exception.InvalidCredentialsException;
+import com.parking.user.model.User;
+import com.parking.user.repository.UserRepository;
+import com.parking.user.security.JwtUtil;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.util.UUID;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class UserService {
+
+    private final UserRepository userRepository;
+    private final JwtUtil jwtUtil;
+    private final PasswordEncoder passwordEncoder;
+
+    public UserResponse register(RegisterRequest request) {
+        log.info("Registering new user with email: {}", request.getEmail());
+
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new ResourceAlreadyExistsException("Email already registered");
+        }
+
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new ResourceAlreadyExistsException("Username already taken");
+        }
+
+        User user = User.builder()
+                .id(UUID.randomUUID().toString())
+                .username(request.getUsername())
+                .email(request.getEmail())
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .phone(request.getPhone())
+                .role("ROLE_USER")
+                .isActive(true)
+                .build();
+
+        userRepository.save(user);
+        log.info("User registered successfully with id: {}", user.getId());
+
+        return mapToUserResponse(user);
+    }
+
+    public AuthResponse login(LoginRequest request) {
+        log.info("Login attempt for email: {}", request.getEmail());
+
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new InvalidCredentialsException("Invalid email or password"));
+
+        if (!user.isActive()) {
+            throw new InvalidCredentialsException("Account is deactivated");
+        }
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            throw new InvalidCredentialsException("Invalid email or password");
+        }
+
+        String token = jwtUtil.generateToken(
+                user.getId(),
+                user.getEmail(),
+                user.getRole()
+        );
+
+        log.info("User logged in successfully: {}", user.getEmail());
+
+        return AuthResponse.builder()
+                .token(token)
+                .tokenType("Bearer")
+                .userId(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .role(user.getRole())
+                .build();
+    }
+
+    public UserResponse getProfile(String userId) {
+        log.info("Fetching profile for userId: {}", userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        return mapToUserResponse(user);
+    }
+
+    public UserResponse updateProfile(String userId, UpdateProfileRequest request) {
+        log.info("Updating profile for userId: {}", userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (request.getUsername() != null && !request.getUsername().equals(user.getUsername())) {
+            if (userRepository.existsByUsername(request.getUsername())) {
+                throw new ResourceAlreadyExistsException("Username already taken");
+            }
+            user.setUsername(request.getUsername());
+        }
+
+        if (request.getPhone() != null) {
+            user.setPhone(request.getPhone());
+        }
+
+        userRepository.update(user);
+        log.info("Profile updated successfully for userId: {}", userId);
+
+        return mapToUserResponse(
+                userRepository.findById(userId)
+                        .orElseThrow(() -> new ResourceNotFoundException("User not found"))
+        );
+    }
+
+    private UserResponse mapToUserResponse(User user) {
+        return UserResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .role(user.getRole())
+                .isActive(user.isActive())
+                .createdAt(user.getCreatedAt())
+                .build();
+    }
+}
