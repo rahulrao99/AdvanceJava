@@ -1,0 +1,13 @@
+INSERT INTO users 
+(id, username, email, password_hash, phone, role, is_active, created_at, updated_at)
+VALUES (
+    UUID(),
+    'superadmin',
+    'admin@parking.com',
+    '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lh71',
+    '9000000000',
+    'ROLE_ADMIN',
+    1,
+    NOW(),
+    NOW()
+);
