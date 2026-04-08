@@ -1,0 +1,48 @@
+package com.parking.user.controller;
+
+import com.parking.user.dto.request.UpdateProfileRequest;
+import com.parking.user.dto.response.ApiResponse;
+import com.parking.user.dto.response.UserResponse;
+import com.parking.user.service.UserService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/users")
+@RequiredArgsConstructor
+public class UserController {
+
+    private final UserService userService;
+
+    @GetMapping("/profile")
+    public ResponseEntity<ApiResponse<UserResponse>> getProfile() {
+        String userId = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getPrincipal()
+                .toString();
+        log.info("Get profile request for userId: {}", userId);
+        UserResponse user = userService.getProfile(userId);
+        return ResponseEntity.ok(ApiResponse.success("Profile fetched successfully", user));
+    }
+
+    @PutMapping("/profile")
+    public ResponseEntity<ApiResponse<UserResponse>> updateProfile(
+            @Valid @RequestBody UpdateProfileRequest request) {
+        String userId = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getPrincipal()
+                .toString();
+        log.info("Update profile request for userId: {}", userId);
+        UserResponse user = userService.updateProfile(userId, request);
+        return ResponseEntity.ok(ApiResponse.success("Profile updated successfully", user));
+    }
+}
