@@ -1,0 +1,98 @@
+package com.parking.user.repository;
+
+import com.parking.user.model.User;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Optional;
+
+@Slf4j
+@Repository
+@RequiredArgsConstructor
+public class UserRepository {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    private final RowMapper<User> userRowMapper = (rs, rowNum) -> mapRow(rs);
+
+    private User mapRow(ResultSet rs) throws SQLException {
+        return User.builder()
+                .id(rs.getString("id"))
+                .username(rs.getString("username"))
+                .email(rs.getString("email"))
+                .passwordHash(rs.getString("password_hash"))
+                .phone(rs.getString("phone"))
+                .role(rs.getString("role"))
+                .isActive(rs.getBoolean("is_active"))
+                .createdAt(rs.getTimestamp("created_at").toLocalDateTime())
+                .updatedAt(rs.getTimestamp("updated_at").toLocalDateTime())
+                .build();
+    }
+
+    public void save(User user) {
+        log.debug("Saving user with email: {}", user.getEmail());
+        String sql = """
+                INSERT INTO users
+                (id, username, email, password_hash, phone, role, is_active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                """;
+        jdbcTemplate.update(sql,
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getPasswordHash(),
+                user.getPhone(),
+                user.getRole(),
+                user.isActive()
+        );
+    }
+
+    public Optional<User> findByEmail(String email) {
+        log.debug("Finding user by email: {}", email);
+        String sql = "SELECT * FROM users WHERE email = ?";
+        return jdbcTemplate.query(sql, userRowMapper, email)
+                .stream()
+                .findFirst();
+    }
+
+    public Optional<User> findById(String id) {
+        log.debug("Finding user by id: {}", id);
+        String sql = "SELECT * FROM users WHERE id = ?";
+        return jdbcTemplate.query(sql, userRowMapper, id)
+                .stream()
+                .findFirst();
+    }
+
+    public boolean existsByEmail(String email) {
+        log.debug("Checking if email exists: {}", email);
+        String sql = "SELECT COUNT(*) FROM users WHERE email = ?";
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, email);
+        return count != null && count > 0;
+    }
+
+    public boolean existsByUsername(String username) {
+        log.debug("Checking if username exists: {}", username);
+        String sql = "SELECT COUNT(*) FROM users WHERE username = ?";
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, username);
+        return count != null && count > 0;
+    }
+
+    public void update(User user) {
+        log.debug("Updating user with id: {}", user.getId());
+        String sql = """
+                UPDATE users
+                SET username = ?, phone = ?, updated_at = NOW()
+                WHERE id = ?
+                """;
+        jdbcTemplate.update(sql,
+                user.getUsername(),
+                user.getPhone(),
+                user.getId()
+        );
+    }
+}
