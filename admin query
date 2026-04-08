@@ -11,3 +11,9 @@ VALUES (
     NOW(),
     NOW()
 );
+
+
+
+UPDATE users 
+SET password_hash = '$2a$10$8K1p/a0dR1xqM4K3vH5HMeGNpLzx9bGhxD6nOyOWqLhTdTqjN0Jlm'
+WHERE email = 'admin@parking.com';
