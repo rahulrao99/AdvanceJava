@@ -27,3 +27,15 @@ WHERE email = 'admin@parking.com';
 
 SELECT email, password_hash, role FROM users 
 WHERE email = 'admin@parking.com';
+
+
+
+
+
+USE vehicle_parking_db;
+
+-- First delete if exists
+DELETE FROM users WHERE email = 'admin@parking.com';
+
+-- Verify deleted
+SELECT * FROM users WHERE email = 'admin@parking.com';
