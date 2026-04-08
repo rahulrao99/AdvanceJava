@@ -19,6 +19,11 @@ SET password_hash = '$2a$10$8K1p/a0dR1xqM4K3vH5HMeGNpLzx9bGhxD6nOyOWqLhTdTqjN0Jl
 WHERE email = 'admin@parking.com';
 
 
+UPDATE users 
+SET role = 'ROLE_ADMIN'
+WHERE email = 'admin@parking.com';
+
+
 
 SELECT email, password_hash, role FROM users 
 WHERE email = 'admin@parking.com';
