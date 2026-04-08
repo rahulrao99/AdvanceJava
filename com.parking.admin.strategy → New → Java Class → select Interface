@@ -1,0 +1,14 @@
+package com.parking.admin.strategy;
+
+import com.parking.admin.dto.response.NearestGateResponse;
+import com.parking.admin.model.EntryExitGate;
+
+import java.util.List;
+
+public interface GateSelectionStrategy {
+    NearestGateResponse findNearestGates(
+            List<EntryExitGate> gates,
+            Double userLatitude,
+            Double userLongitude
+    );
+}
