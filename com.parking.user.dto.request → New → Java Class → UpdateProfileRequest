@@ -1,0 +1,15 @@
+package com.parking.user.dto.request;
+
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+
+@Data
+public class UpdateProfileRequest {
+
+    @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
+    private String username;
+
+    @Pattern(regexp = "^[0-9]{10}$", message = "Phone must be 10 digits")
+    private String phone;
+}
