@@ -1,0 +1,56 @@
+Test in Postman — Complete Flow
+1 — Login as admin first
+POST http://localhost:8080/api/auth/login
+{
+    "email": "admin@parking.com",
+    "password": "Admin@1234"
+}
+Copy the token.
+2 — Create parking lot
+POST http://localhost:8080/api/admin/lots
+Authorization: Bearer <admin_token>
+{
+    "name": "Central Parking",
+    "address": "123 Main Street, Pune",
+    "latitude": 18.5204,
+    "longitude": 73.8567,
+    "totalLevels": 3
+}
+3 — Add level to lot
+POST http://localhost:8080/api/admin/lots/{lotId}/levels
+Authorization: Bearer <admin_token>
+{
+    "levelNumber": 0,
+    "label": "G",
+    "totalSpots": 20
+}
+4 — Add spot to level
+POST http://localhost:8080/api/admin/levels/{levelId}/spots
+Authorization: Bearer <admin_token>
+{
+    "spotCode": "G-001",
+    "vehicleType": "FOUR_WHEELER"
+}
+5 — Add gate to lot
+POST http://localhost:8080/api/admin/lots/{lotId}/gates
+Authorization: Bearer <admin_token>
+{
+    "gateCode": "GATE-E1",
+    "gateType": "ENTRY",
+    "latitude": 18.5210,
+    "longitude": 73.8570
+}
+6 — Get nearest gate
+GET http://localhost:8080/api/admin/lots/{lotId}/nearest-gate?latitude=18.5200&longitude=73.8560
+Authorization: Bearer <admin_token>
+7 — Set fee config
+POST http://localhost:8080/api/admin/lots/{lotId}/fees
+Authorization: Bearer <admin_token>
+{
+    "vehicleType": "FOUR_WHEELER",
+    "ratePerHour": 50.00,
+    "graceMinutes": 15
+}
+8 — Get all lots paginated
+GET http://localhost:8080/api/admin/lots?page=0&size=10
+Authorization: Bearer <admin_token>
