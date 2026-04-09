@@ -1,0 +1,98 @@
+package com.parking.booking.controller;
+
+import com.parking.booking.dto.request.BookingRequest;
+import com.parking.booking.dto.request.VehicleExitRequest;
+import com.parking.booking.dto.response.ApiResponse;
+import com.parking.booking.dto.response.BookingResponse;
+import com.parking.booking.dto.response.PageResponse;
+import com.parking.booking.dto.response.VehicleSessionResponse;
+import com.parking.booking.service.BookingService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/bookings")
+@RequiredArgsConstructor
+public class BookingController {
+
+    private final BookingService bookingService;
+
+    @PostMapping
+    public ResponseEntity<ApiResponse<BookingResponse>> createBooking(
+            @Valid @RequestBody BookingRequest request) {
+        String userId = SecurityContextHolder.getContext()
+                .getAuthentication().getPrincipal().toString();
+        log.info("Create booking request from user: {}", userId);
+        BookingResponse response =
+                bookingService.createBooking(userId, request);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success(
+                        "Booking created successfully", response));
+    }
+
+    @GetMapping("/{bookingId}")
+    public ResponseEntity<ApiResponse<BookingResponse>> getBooking(
+            @PathVariable("bookingId") String bookingId) {
+        log.info("Get booking: {}", bookingId);
+        BookingResponse response =
+                bookingService.getBookingById(bookingId);
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Booking fetched successfully", response));
+    }
+
+    @GetMapping("/my-bookings")
+    public ResponseEntity<ApiResponse<PageResponse<BookingResponse>>>
+            getMyBookings(
+                @RequestParam(defaultValue = "0") int page,
+                @RequestParam(defaultValue = "10") int size) {
+        String userId = SecurityContextHolder.getContext()
+                .getAuthentication().getPrincipal().toString();
+        log.info("Get bookings for user: {}", userId);
+        PageResponse<BookingResponse> response =
+                bookingService.getMyBookings(userId, page, size);
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Bookings fetched successfully", response));
+    }
+
+    @PutMapping("/{bookingId}/cancel")
+    public ResponseEntity<ApiResponse<BookingResponse>> cancelBooking(
+            @PathVariable("bookingId") String bookingId) {
+        String userId = SecurityContextHolder.getContext()
+                .getAuthentication().getPrincipal().toString();
+        log.info("Cancel booking: {} by user: {}", bookingId, userId);
+        BookingResponse response =
+                bookingService.cancelBooking(bookingId, userId);
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Booking cancelled successfully", response));
+    }
+
+    @PostMapping("/{bookingId}/exit")
+    public ResponseEntity<ApiResponse<VehicleSessionResponse>>
+            processExit(
+                @PathVariable("bookingId") String bookingId,
+                @Valid @RequestBody VehicleExitRequest request) {
+        log.info("Vehicle exit for booking: {}", bookingId);
+        VehicleSessionResponse response =
+                bookingService.processVehicleExit(bookingId, request);
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Exit processed successfully", response));
+    }
+}
