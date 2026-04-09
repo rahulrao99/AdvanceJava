@@ -1,0 +1,15 @@
+Step 9 — Copy Security files from Admin Service
+Copy these files exactly — just change package name to com.parking.booking.*:
+
+JwtUtil.java → com.parking.booking.security
+JwtAuthFilter.java → com.parking.booking.filter
+SecurityConfig.java → com.parking.booking.config
+Exception classes → com.parking.booking.exception
+GlobalExceptionHandler.java → com.parking.booking.exception
+
+For SecurityConfig.java change the authorized paths:
+java.authorizeHttpRequests(auth -> auth
+    .requestMatchers("/actuator/**").permitAll()
+    .requestMatchers("/api/bookings/**").authenticated()
+    .anyRequest().authenticated()
+)
