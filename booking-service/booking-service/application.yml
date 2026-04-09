@@ -1,0 +1,12 @@
+mportant Note About Kafka
+Since Kafka requires a running Kafka server, let's make it optional for now. If Kafka is not running, booking still works — the try/catch in BookingService handles it gracefully.
+To skip Kafka for now, add this to booking-service/application.yml:
+
+
+
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      properties:
+        max.block.ms: 1000  # fail fast if kafka not running
