@@ -1,0 +1,127 @@
+package com.parking.admin.service;
+
+import com.parking.admin.dto.request.ParkingLotRequest;
+import com.parking.admin.dto.response.PageResponse;
+import com.parking.admin.dto.response.ParkingLotResponse;
+import com.parking.admin.exception.ResourceAlreadyExistsException;
+import com.parking.admin.exception.ResourceNotFoundException;
+import com.parking.admin.model.ParkingLot;
+import com.parking.admin.repository.ParkingLotRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.UUID;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ParkingLotService {
+
+    private final ParkingLotRepository parkingLotRepository;
+
+    public ParkingLotResponse createLot(ParkingLotRequest request) {
+        log.info("Creating parking lot: {}", request.getName());
+
+        if (parkingLotRepository.existsByName(request.getName())) {
+            throw new ResourceAlreadyExistsException(
+                "Parking lot with name '" + request.getName() + "' already exists");
+        }
+
+        ParkingLot lot = ParkingLot.builder()
+                .id(UUID.randomUUID().toString())
+                .name(request.getName())
+                .address(request.getAddress())
+                .latitude(request.getLatitude())
+                .longitude(request.getLongitude())
+                .totalLevels(request.getTotalLevels())
+                .isActive(true)
+                .build();
+
+        parkingLotRepository.save(lot);
+        log.info("Parking lot created: {}", lot.getId());
+
+        return parkingLotRepository.findById(lot.getId())
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Lot not found after creation"));
+    }
+
+    public PageResponse<ParkingLotResponse> getAllLots(int page, int size) {
+        log.info("Fetching parking lots page: {}", page);
+
+        int offset = page * size;
+        List<ParkingLotResponse> lots = parkingLotRepository
+                .findAll(offset, size)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+
+        long totalElements = parkingLotRepository.countAll();
+        int totalPages = (int) Math.ceil((double) totalElements / size);
+
+        return PageResponse.<ParkingLotResponse>builder()
+                .content(lots)
+                .page(page)
+                .size(size)
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .isFirst(page == 0)
+                .isLast(page >= totalPages - 1)
+                .build();
+    }
+
+    public ParkingLotResponse getLotById(String id) {
+        log.info("Fetching parking lot: {}", id);
+        return parkingLotRepository.findById(id)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Parking lot not found with id: " + id));
+    }
+
+    public ParkingLotResponse updateLot(String id,
+                                         ParkingLotRequest request) {
+        log.info("Updating parking lot: {}", id);
+
+        ParkingLot lot = parkingLotRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Parking lot not found with id: " + id));
+
+        lot.setName(request.getName());
+        lot.setAddress(request.getAddress());
+        lot.setLatitude(request.getLatitude());
+        lot.setLongitude(request.getLongitude());
+        lot.setTotalLevels(request.getTotalLevels());
+
+        parkingLotRepository.update(lot);
+        log.info("Parking lot updated: {}", id);
+
+        return parkingLotRepository.findById(id)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Lot not found after update"));
+    }
+
+    public void deleteLot(String id) {
+        log.info("Deleting parking lot: {}", id);
+        parkingLotRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Parking lot not found with id: " + id));
+        parkingLotRepository.deleteById(id);
+        log.info("Parking lot deleted: {}", id);
+    }
+
+    private ParkingLotResponse mapToResponse(ParkingLot lot) {
+        return ParkingLotResponse.builder()
+                .id(lot.getId())
+                .name(lot.getName())
+                .address(lot.getAddress())
+                .latitude(lot.getLatitude())
+                .longitude(lot.getLongitude())
+                .totalLevels(lot.getTotalLevels())
+                .isActive(lot.isActive())
+                .createdAt(lot.getCreatedAt())
+                .build();
+    }
+}
