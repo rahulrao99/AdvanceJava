@@ -1,0 +1,3 @@
+@GetMapping("/api/admin/spots/{spotId}/lot")
+ApiResponse<String> getLotIdBySpotId(
+        @PathVariable("spotId") String spotId);
