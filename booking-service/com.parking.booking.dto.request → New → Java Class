@@ -1,0 +1,25 @@
+package com.parking.booking.dto.request;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import lombok.Data;
+
+@Data
+public class BookingRequest {
+
+    @NotBlank(message = "Spot ID is required")
+    private String spotId;
+
+    @NotBlank(message = "Vehicle number is required")
+    private String vehicleNumber;
+
+    @NotBlank(message = "Vehicle type is required")
+    @Pattern(
+        regexp = "TWO_WHEELER|FOUR_WHEELER|HEAVY_VEHICLE",
+        message = "Vehicle type must be TWO_WHEELER, FOUR_WHEELER or HEAVY_VEHICLE"
+    )
+    private String vehicleType;
+
+    @NotBlank(message = "Entry gate ID is required")
+    private String entryGateId;
+}
