@@ -1,0 +1,26 @@
+package com.parking.booking.dto.response;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class BookingResponse {
+    private String id;
+    private String userId;
+    private String spotId;
+    private String status;
+    private LocalDateTime startTime;
+    private LocalDateTime endTime;
+    private BigDecimal amount;
+    private String vehicleNumber;
+    private String vehicleType;
+    private LocalDateTime createdAt;
+}
