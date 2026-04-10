@@ -1,0 +1,830 @@
+Let's build Payment Service!
+
+Step 1 — Generate from start.spring.io
+FieldValueGroupcom.parkingArtifactpayment-servicePackagecom.parking.paymentJava21Spring Boot3.2.5
+Dependencies:
+
+Spring Web
+Spring Security
+Eureka Discovery Client
+Spring Data JDBC
+MySQL Driver
+Validation
+Lombok
+Spring Boot Actuator
+Flyway Migration
+OpenFeign
+Spring for Apache Kafka
+
+Generate → extract → move into repo folder.
+
+Step 2 — Fix payment-service/pom.xml
+Replace entire content with:
+xml<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.parking</groupId>
+        <artifactId>vehicle-parking-management</artifactId>
+        <version>1.0.0</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>payment-service</artifactId>
+    <name>payment-service</name>
+    <description>Payment Service for Vehicle Parking Management</description>
+
+    <properties>
+        <java.version>21</java.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.11.5</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.5.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+
+Step 3 — Create package structure
+com.parking.payment.config
+com.parking.payment.controller
+com.parking.payment.dto.request
+com.parking.payment.dto.response
+com.parking.payment.exception
+com.parking.payment.filter
+com.parking.payment.kafka
+com.parking.payment.model
+com.parking.payment.repository
+com.parking.payment.security
+com.parking.payment.service
+
+Step 4 — application.yml
+Rename application.properties to application.yml → paste:
+yamlserver:
+  port: 8084
+
+spring:
+  application:
+    name: payment-service
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/vehicle_parking_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password: your_mysql_password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  flyway:
+    enabled: false
+
+  cache:
+    type: none
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: payment-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: false
+    hostname: localhost
+    instance-id: ${spring.application.name}:${server.port}
+
+jwt:
+  secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+  expiration: 86400000
+
+logging:
+  level:
+    com.parking.payment: DEBUG
+    org.springframework.security: INFO
+    org.springframework.jdbc: DEBUG
+    org.springframework.kafka: INFO
+Replace your_mysql_password with actual password.
+
+Step 5 — Add route in API Gateway
+Open api-gateway → application.yml — verify this route exists:
+yaml- id: payment-service
+  uri: lb://payment-service
+  predicates:
+    - Path=/api/payments/**
+  filters:
+    - StripPrefix=0
+
+Step 6 — Copy Security files
+Copy these from Booking Service — just change package to com.parking.payment.*:
+JwtUtil.java → com.parking.payment.security
+JwtAuthFilter.java → com.parking.payment.filter
+SecurityConfig.java → com.parking.payment.config
+Exception classes → com.parking.payment.exception
+SecurityConfig.java for Payment Service:
+javapackage com.parking.payment.config;
+
+import com.parking.payment.filter.JwtAuthFilter;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
+
+    private final JwtAuthFilter jwtAuthFilter;
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http) throws Exception {
+        http
+            .csrf(AbstractHttpConfigurer::disable)
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(
+                        SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/actuator/**").permitAll()
+                .requestMatchers("/api/payments/**")
+                        .authenticated()
+                .anyRequest().authenticated()
+            )
+            .addFilterBefore(jwtAuthFilter,
+                UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+
+Step 7 — Model
+Payment.java
+Right-click com.parking.payment.model → New → Java Class
+javapackage com.parking.payment.model;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class Payment {
+    private String id;
+    private String bookingId;
+    private String userId;
+    private BigDecimal amount;
+    private String status;
+    private String transactionId;
+    private String paymentMode;
+    private LocalDateTime paidAt;
+    private LocalDateTime createdAt;
+}
+
+Step 8 — DTOs
+PaymentRequest.java
+Right-click com.parking.payment.dto.request → New → Java Class
+javapackage com.parking.payment.dto.request;
+
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import lombok.Data;
+
+import java.math.BigDecimal;
+
+@Data
+public class PaymentRequest {
+
+    @NotBlank(message = "Booking ID is required")
+    private String bookingId;
+
+    @NotNull(message = "Amount is required")
+    @DecimalMin(value = "0.0",
+                message = "Amount must be greater than 0")
+    private BigDecimal amount;
+
+    @NotBlank(message = "Payment mode is required")
+    @Pattern(
+        regexp = "CASH|CARD|UPI|WALLET|ONLINE",
+        message = "Invalid payment mode"
+    )
+    private String paymentMode;
+}
+PaymentResponse.java
+Right-click com.parking.payment.dto.response → New → Java Class
+javapackage com.parking.payment.dto.response;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class PaymentResponse {
+    private String id;
+    private String bookingId;
+    private String userId;
+    private BigDecimal amount;
+    private String status;
+    private String transactionId;
+    private String paymentMode;
+    private LocalDateTime paidAt;
+    private LocalDateTime createdAt;
+}
+ApiResponse.java and PageResponse.java
+Copy same files from Booking Service — just change package to com.parking.payment.dto.response.
+
+Step 9 — Kafka
+PaymentEvent.java
+Right-click com.parking.payment.kafka → New → Java Class
+javapackage com.parking.payment.kafka;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class PaymentEvent {
+    private String eventType;
+    private String paymentId;
+    private String bookingId;
+    private String userId;
+    private BigDecimal amount;
+    private String status;
+    private LocalDateTime timestamp;
+}
+KafkaProducerService.java
+javapackage com.parking.payment.kafka;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Service;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class KafkaProducerService {
+
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+
+    public static final String PAYMENT_COMPLETED =
+            "payment.completed";
+    public static final String PAYMENT_FAILED =
+            "payment.failed";
+
+    public void publishPaymentCompleted(PaymentEvent event) {
+        log.info("Publishing payment.completed: {}",
+                event.getPaymentId());
+        try {
+            kafkaTemplate.send(PAYMENT_COMPLETED,
+                    event.getPaymentId(), event);
+        } catch (Exception e) {
+            log.warn("Kafka publish failed: {}", e.getMessage());
+        }
+    }
+
+    public void publishPaymentFailed(PaymentEvent event) {
+        log.info("Publishing payment.failed: {}",
+                event.getPaymentId());
+        try {
+            kafkaTemplate.send(PAYMENT_FAILED,
+                    event.getPaymentId(), event);
+        } catch (Exception e) {
+            log.warn("Kafka publish failed: {}", e.getMessage());
+        }
+    }
+}
+
+Step 10 — Repository
+PaymentRepository.java
+javapackage com.parking.payment.repository;
+
+import com.parking.payment.model.Payment;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+@Slf4j
+@Repository
+@RequiredArgsConstructor
+public class PaymentRepository {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    private final RowMapper<Payment> rowMapper = (rs, rowNum) ->
+            Payment.builder()
+                    .id(rs.getString("id"))
+                    .bookingId(rs.getString("booking_id"))
+                    .userId(rs.getString("user_id"))
+                    .amount(rs.getBigDecimal("amount"))
+                    .status(rs.getString("status"))
+                    .transactionId(rs.getString("transaction_id"))
+                    .paymentMode(rs.getString("payment_mode"))
+                    .paidAt(rs.getTimestamp("paid_at") != null
+                            ? rs.getTimestamp("paid_at")
+                                    .toLocalDateTime() : null)
+                    .createdAt(rs.getTimestamp("created_at")
+                            .toLocalDateTime())
+                    .build();
+
+    public void save(Payment payment) {
+        log.debug("Saving payment: {}", payment.getId());
+        String sql = """
+                INSERT INTO payments
+                (id, booking_id, user_id, amount, status,
+                 payment_mode, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, NOW())
+                """;
+        jdbcTemplate.update(sql,
+                payment.getId(),
+                payment.getBookingId(),
+                payment.getUserId(),
+                payment.getAmount(),
+                payment.getStatus(),
+                payment.getPaymentMode()
+        );
+    }
+
+    public Optional<Payment> findById(String id) {
+        String sql = "SELECT * FROM payments WHERE id = ?";
+        return jdbcTemplate.query(sql, rowMapper, id)
+                .stream().findFirst();
+    }
+
+    public Optional<Payment> findByBookingId(String bookingId) {
+        String sql = """
+                SELECT * FROM payments WHERE booking_id = ?
+                """;
+        return jdbcTemplate.query(sql, rowMapper, bookingId)
+                .stream().findFirst();
+    }
+
+    public List<Payment> findByUserId(String userId,
+                                       int offset, int size) {
+        String sql = """
+                SELECT * FROM payments
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+                """;
+        return jdbcTemplate.query(sql, rowMapper,
+                userId, size, offset);
+    }
+
+    public long countByUserId(String userId) {
+        String sql = """
+                SELECT COUNT(*) FROM payments
+                WHERE user_id = ?
+                """;
+        Long count = jdbcTemplate.queryForObject(
+                sql, Long.class, userId);
+        return count != null ? count : 0;
+    }
+
+    public void updateStatus(String paymentId,
+                              String status,
+                              String transactionId) {
+        log.debug("Updating payment status: {} → {}",
+                paymentId, status);
+        String sql = """
+                UPDATE payments
+                SET status = ?,
+                    transaction_id = ?,
+                    paid_at = CASE
+                        WHEN ? = 'COMPLETED' THEN NOW()
+                        ELSE paid_at END,
+                    updated_at = NOW()
+                WHERE id = ?
+                """;
+        jdbcTemplate.update(sql,
+                status, transactionId, status, paymentId);
+    }
+}
+
+Step 11 — PaymentService
+javapackage com.parking.payment.service;
+
+import com.parking.payment.dto.request.PaymentRequest;
+import com.parking.payment.dto.response.PageResponse;
+import com.parking.payment.dto.response.PaymentResponse;
+import com.parking.payment.exception.ResourceNotFoundException;
+import com.parking.payment.exception.ResourceAlreadyExistsException;
+import com.parking.payment.kafka.KafkaProducerService;
+import com.parking.payment.kafka.PaymentEvent;
+import com.parking.payment.model.Payment;
+import com.parking.payment.repository.PaymentRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class PaymentService {
+
+    private final PaymentRepository paymentRepository;
+    private final KafkaProducerService kafkaProducerService;
+
+    public PaymentResponse initiatePayment(String userId,
+                                            PaymentRequest request) {
+        log.info("Initiating payment for booking: {}",
+                request.getBookingId());
+
+        paymentRepository.findByBookingId(request.getBookingId())
+                .ifPresent(p -> {
+                    if (p.getStatus().equals("COMPLETED")) {
+                        throw new ResourceAlreadyExistsException(
+                            "Payment already completed for this booking");
+                    }
+                });
+
+        Payment payment = Payment.builder()
+                .id(UUID.randomUUID().toString())
+                .bookingId(request.getBookingId())
+                .userId(userId)
+                .amount(request.getAmount())
+                .status("PENDING")
+                .paymentMode(request.getPaymentMode())
+                .build();
+
+        paymentRepository.save(payment);
+        log.info("Payment initiated: {}", payment.getId());
+
+        return processPayment(payment);
+    }
+
+    private PaymentResponse processPayment(Payment payment) {
+        log.info("Processing payment: {}", payment.getId());
+
+        try {
+            String transactionId = "TXN-"
+                    + UUID.randomUUID().toString()
+                            .substring(0, 8).toUpperCase();
+
+            paymentRepository.updateStatus(
+                    payment.getId(), "COMPLETED", transactionId);
+
+            log.info("Payment completed: {} txn: {}",
+                    payment.getId(), transactionId);
+
+            kafkaProducerService.publishPaymentCompleted(
+                    PaymentEvent.builder()
+                            .eventType("PAYMENT_COMPLETED")
+                            .paymentId(payment.getId())
+                            .bookingId(payment.getBookingId())
+                            .userId(payment.getUserId())
+                            .amount(payment.getAmount())
+                            .status("COMPLETED")
+                            .timestamp(LocalDateTime.now())
+                            .build());
+
+            return paymentRepository.findById(payment.getId())
+                    .map(this::mapToResponse)
+                    .orElseThrow();
+
+        } catch (Exception e) {
+            log.error("Payment failed: {}", e.getMessage());
+
+            paymentRepository.updateStatus(
+                    payment.getId(), "FAILED", null);
+
+            kafkaProducerService.publishPaymentFailed(
+                    PaymentEvent.builder()
+                            .eventType("PAYMENT_FAILED")
+                            .paymentId(payment.getId())
+                            .bookingId(payment.getBookingId())
+                            .userId(payment.getUserId())
+                            .amount(payment.getAmount())
+                            .status("FAILED")
+                            .timestamp(LocalDateTime.now())
+                            .build());
+
+            return paymentRepository.findById(payment.getId())
+                    .map(this::mapToResponse)
+                    .orElseThrow();
+        }
+    }
+
+    public PaymentResponse getPaymentById(String paymentId) {
+        log.info("Fetching payment: {}", paymentId);
+        return paymentRepository.findById(paymentId)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Payment not found: " + paymentId));
+    }
+
+    public PaymentResponse getPaymentByBookingId(
+            String bookingId) {
+        log.info("Fetching payment for booking: {}", bookingId);
+        return paymentRepository.findByBookingId(bookingId)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Payment not found for booking: "
+                                + bookingId));
+    }
+
+    public PageResponse<PaymentResponse> getMyPayments(
+            String userId, int page, int size) {
+        log.info("Fetching payments for user: {}", userId);
+
+        int offset = page * size;
+
+        List<PaymentResponse> payments = paymentRepository
+                .findByUserId(userId, offset, size)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+
+        long total = paymentRepository.countByUserId(userId);
+        int totalPages = (int) Math.ceil(
+                (double) total / size);
+
+        return PageResponse.<PaymentResponse>builder()
+                .content(payments)
+                .page(page)
+                .size(size)
+                .totalElements(total)
+                .totalPages(totalPages)
+                .isFirst(page == 0)
+                .isLast(page >= totalPages - 1)
+                .build();
+    }
+
+    private PaymentResponse mapToResponse(Payment payment) {
+        return PaymentResponse.builder()
+                .id(payment.getId())
+                .bookingId(payment.getBookingId())
+                .userId(payment.getUserId())
+                .amount(payment.getAmount())
+                .status(payment.getStatus())
+                .transactionId(payment.getTransactionId())
+                .paymentMode(payment.getPaymentMode())
+                .paidAt(payment.getPaidAt())
+                .createdAt(payment.getCreatedAt())
+                .build();
+    }
+}
+
+Step 12 — PaymentController
+javapackage com.parking.payment.controller;
+
+import com.parking.payment.dto.request.PaymentRequest;
+import com.parking.payment.dto.response.ApiResponse;
+import com.parking.payment.dto.response.PageResponse;
+import com.parking.payment.dto.response.PaymentResponse;
+import com.parking.payment.service.PaymentService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/payments")
+@RequiredArgsConstructor
+public class PaymentController {
+
+    private final PaymentService paymentService;
+
+    @PostMapping
+    public ResponseEntity<ApiResponse<PaymentResponse>>
+            initiatePayment(
+                @Valid @RequestBody PaymentRequest request) {
+        String userId = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getPrincipal().toString();
+        log.info("Payment request from user: {}", userId);
+        PaymentResponse response =
+                paymentService.initiatePayment(userId, request);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success(
+                        "Payment processed successfully",
+                        response));
+    }
+
+    @GetMapping("/{paymentId}")
+    public ResponseEntity<ApiResponse<PaymentResponse>>
+            getPayment(
+                @PathVariable("paymentId") String paymentId) {
+        log.info("Get payment: {}", paymentId);
+        PaymentResponse response =
+                paymentService.getPaymentById(paymentId);
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Payment fetched successfully", response));
+    }
+
+    @GetMapping("/booking/{bookingId}")
+    public ResponseEntity<ApiResponse<PaymentResponse>>
+            getPaymentByBooking(
+                @PathVariable("bookingId") String bookingId) {
+        log.info("Get payment for booking: {}", bookingId);
+        PaymentResponse response =
+                paymentService.getPaymentByBookingId(bookingId);
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Payment fetched successfully", response));
+    }
+
+    @GetMapping("/my-payments")
+    public ResponseEntity<ApiResponse<PageResponse<PaymentResponse>>>
+            getMyPayments(
+                @RequestParam(defaultValue = "0") int page,
+                @RequestParam(defaultValue = "10") int size) {
+        String userId = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getPrincipal().toString();
+        log.info("Get payments for user: {}", userId);
+        PageResponse<PaymentResponse> response =
+                paymentService.getMyPayments(userId, page, size);
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Payments fetched successfully", response));
+    }
+}
+
+Step 13 — PaymentServiceApplication.java
+javapackage com.parking.payment;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+
+@SpringBootApplication
+@EnableDiscoveryClient
+@EnableFeignClients
+public class PaymentServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(
+                PaymentServiceApplication.class, args);
+    }
+}
+
+Also fix payments table — add updated_at column
+Run this in MySQL Workbench:
+sqlALTER TABLE payments 
+ADD COLUMN updated_at DATETIME 
+DEFAULT CURRENT_TIMESTAMP 
+ON UPDATE CURRENT_TIMESTAMP;
+
+Create all files, Maven reload, start Payment Service and tell me when running on Eureka! 
