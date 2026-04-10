@@ -1,0 +1,359 @@
+package com.parking.booking.service;
+
+import com.parking.booking.dto.request.BookingRequest;
+import com.parking.booking.dto.request.VehicleExitRequest;
+import com.parking.booking.dto.response.BookingResponse;
+import com.parking.booking.dto.response.FeeConfigResponse;
+import com.parking.booking.dto.response.PageResponse;
+import com.parking.booking.dto.response.SpotResponse;
+import com.parking.booking.dto.response.VehicleSessionResponse;
+import com.parking.booking.exception.ResourceAlreadyExistsException;
+import com.parking.booking.exception.ResourceNotFoundException;
+import com.parking.booking.feign.AdminServiceClient;
+import com.parking.booking.kafka.BookingEvent;
+import com.parking.booking.kafka.KafkaProducerService;
+import com.parking.booking.model.Booking;
+import com.parking.booking.model.VehicleSession;
+import com.parking.booking.repository.BookingRepository;
+import com.parking.booking.repository.VehicleSessionRepository;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class BookingService {
+
+    private final BookingRepository bookingRepository;
+    private final VehicleSessionRepository vehicleSessionRepository;
+    private final AdminServiceClient adminServiceClient;
+    private final KafkaProducerService kafkaProducerService;
+
+    public BookingResponse createBooking(String userId,
+                                          BookingRequest request) {
+        log.info("Creating booking for user: {} spot: {}",
+                userId, request.getSpotId());
+
+        String token = getAuthToken();
+
+        SpotResponse spot = adminServiceClient
+                .getSpotById(token, request.getSpotId())
+                .getData();
+
+        if (spot == null || !spot.isActive()) {
+            throw new ResourceNotFoundException(
+                    "Spot not found or inactive");
+        }
+
+        if (spot.isOccupied()) {
+            throw new ResourceAlreadyExistsException(
+                    "Spot is already occupied");
+        }
+
+        if (bookingRepository.existsActiveBookingForSpot(
+                request.getSpotId())) {
+            throw new ResourceAlreadyExistsException(
+                    "Spot already has an active booking");
+        }
+
+        adminServiceClient.markSpotOccupied(
+                token, request.getSpotId(), true);
+
+        Booking booking = Booking.builder()
+                .id(UUID.randomUUID().toString())
+                .userId(userId)
+                .spotId(request.getSpotId())
+                .status("CONFIRMED")
+                .vehicleNumber(request.getVehicleNumber())
+                .vehicleType(request.getVehicleType())
+                .build();
+
+        bookingRepository.save(booking);
+
+        VehicleSession session = VehicleSession.builder()
+                .id(UUID.randomUUID().toString())
+                .bookingId(booking.getId())
+                .entryGateId(request.getEntryGateId())
+                .vehicleNumber(request.getVehicleNumber())
+                .build();
+
+        vehicleSessionRepository.save(session);
+
+        bookingRepository.updateStatus(booking.getId(), "ACTIVE");
+
+        try {
+            kafkaProducerService.publishBookingCreated(
+                    BookingEvent.builder()
+                            .eventType("BOOKING_CREATED")
+                            .bookingId(booking.getId())
+                            .userId(userId)
+                            .spotId(request.getSpotId())
+                            .vehicleNumber(request.getVehicleNumber())
+                            .vehicleType(request.getVehicleType())
+                            .timestamp(LocalDateTime.now())
+                            .build());
+        } catch (Exception e) {
+            log.warn("Kafka publish failed — continuing: {}",
+                    e.getMessage());
+        }
+
+        log.info("Booking created: {}", booking.getId());
+
+        return mapToBookingResponse(
+                bookingRepository.findById(booking.getId())
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Booking not found after creation")));
+    }
+
+    public VehicleSessionResponse processVehicleExit(
+            String bookingId,
+            VehicleExitRequest request) {
+        log.info("Processing exit for booking: {}", bookingId);
+
+        String token = getAuthToken();
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Booking not found: " + bookingId));
+
+        if (!booking.getStatus().equals("ACTIVE")) {
+            throw new ResourceAlreadyExistsException(
+                    "Booking is not active");
+        }
+
+        VehicleSession session = vehicleSessionRepository
+                .findByBookingId(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Session not found for booking: "
+                                + bookingId));
+
+        LocalDateTime entryTime = session.getEntryTime();
+        LocalDateTime exitTime = LocalDateTime.now();
+        long durationMinutes = Duration.between(
+                entryTime, exitTime).toMinutes();
+
+        String lotId = adminServiceClient
+                .getLotIdBySpotId(token, booking.getSpotId())
+                .getData();
+
+        List<FeeConfigResponse> feeConfigs = adminServiceClient
+                .getFeeConfigByLot(token, lotId)
+                .getData();
+
+        BigDecimal fee = calculateFee(
+                durationMinutes,
+                booking.getVehicleType(),
+                feeConfigs);
+
+        vehicleSessionRepository.updateExit(
+                bookingId,
+                request.getExitGateId(),
+                BigDecimal.valueOf(durationMinutes),
+                fee);
+
+        bookingRepository.updateStatusAndAmount(
+                bookingId, "COMPLETED", fee);
+
+        adminServiceClient.markSpotOccupied(
+                token, booking.getSpotId(), false);
+
+        try {
+            kafkaProducerService.publishVehicleExit(
+                    BookingEvent.builder()
+                            .eventType("VEHICLE_EXIT")
+                            .bookingId(bookingId)
+                            .userId(booking.getUserId())
+                            .spotId(booking.getSpotId())
+                            .vehicleNumber(booking.getVehicleNumber())
+                            .amount(fee)
+                            .timestamp(LocalDateTime.now())
+                            .build());
+        } catch (Exception e) {
+            log.warn("Kafka publish failed — continuing: {}",
+                    e.getMessage());
+        }
+
+        log.info("Exit processed for booking: {} fee: {}",
+                bookingId, fee);
+
+        return vehicleSessionRepository
+                .findByBookingId(bookingId)
+                .map(this::mapToSessionResponse)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Session not found after exit"));
+    }
+
+    public BookingResponse getBookingById(String bookingId) {
+        log.info("Fetching booking: {}", bookingId);
+        return bookingRepository.findById(bookingId)
+                .map(this::mapToBookingResponse)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Booking not found: " + bookingId));
+    }
+
+    public PageResponse<BookingResponse> getMyBookings(
+            String userId, int page, int size) {
+        log.info("Fetching bookings for user: {}", userId);
+
+        int offset = page * size;
+
+        List<BookingResponse> bookings = bookingRepository
+                .findByUserId(userId, offset, size)
+                .stream()
+                .map(this::mapToBookingResponse)
+                .toList();
+
+        long total = bookingRepository.countByUserId(userId);
+        int totalPages = (int) Math.ceil((double) total / size);
+
+        return PageResponse.<BookingResponse>builder()
+                .content(bookings)
+                .page(page)
+                .size(size)
+                .totalElements(total)
+                .totalPages(totalPages)
+                .isFirst(page == 0)
+                .isLast(page >= totalPages - 1)
+                .build();
+    }
+
+    public BookingResponse cancelBooking(String bookingId,
+                                          String userId) {
+        log.info("Cancelling booking: {}", bookingId);
+
+        String token = getAuthToken();
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Booking not found: " + bookingId));
+
+        if (!booking.getUserId().equals(userId)) {
+            throw new ResourceNotFoundException(
+                    "Booking not found for this user");
+        }
+
+        if (!booking.getStatus().equals("CONFIRMED")
+                && !booking.getStatus().equals("ACTIVE")) {
+            throw new ResourceAlreadyExistsException(
+                    "Booking cannot be cancelled in status: "
+                            + booking.getStatus());
+        }
+
+        bookingRepository.updateStatus(bookingId, "CANCELLED");
+
+        adminServiceClient.markSpotOccupied(
+                token, booking.getSpotId(), false);
+
+        try {
+            kafkaProducerService.publishBookingCancelled(
+                    BookingEvent.builder()
+                            .eventType("BOOKING_CANCELLED")
+                            .bookingId(bookingId)
+                            .userId(userId)
+                            .timestamp(LocalDateTime.now())
+                            .build());
+        } catch (Exception e) {
+            log.warn("Kafka publish failed: {}", e.getMessage());
+        }
+
+        log.info("Booking cancelled: {}", bookingId);
+
+        return mapToBookingResponse(
+                bookingRepository.findById(bookingId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Booking not found")));
+    }
+
+    private BigDecimal calculateFee(long durationMinutes,
+                                     String vehicleType,
+                                     List<FeeConfigResponse> configs) {
+        log.debug("Calculating fee for {} mins, type: {}",
+                durationMinutes, vehicleType);
+
+        FeeConfigResponse config = configs.stream()
+                .filter(c -> c.getVehicleType()
+                        .equals(vehicleType) && c.isActive())
+                .findFirst()
+                .orElse(null);
+
+        if (config == null) {
+            log.warn("No fee config found for vehicle type: {}",
+                    vehicleType);
+            return BigDecimal.ZERO;
+        }
+
+        long graceMinutes = config.getGraceMinutes() != null
+                ? config.getGraceMinutes() : 0;
+        long billableMinutes = Math.max(
+                0, durationMinutes - graceMinutes);
+        double hours = Math.ceil(
+                (double) billableMinutes / 60);
+
+        BigDecimal fee = config.getRatePerHour()
+                .multiply(BigDecimal.valueOf(hours))
+                .setScale(2, RoundingMode.HALF_UP);
+
+        log.info("Fee calculated: {} for {} mins", fee,
+                durationMinutes);
+
+        return fee;
+    }
+
+    private String getAuthToken() {
+        ServletRequestAttributes attributes =
+                (ServletRequestAttributes) RequestContextHolder
+                        .getRequestAttributes();
+        if (attributes != null) {
+            HttpServletRequest request = attributes.getRequest();
+            String token = request.getHeader("Authorization");
+            if (token != null && token.startsWith("Bearer ")) {
+                return token;
+            }
+        }
+        throw new RuntimeException(
+                "No authorization token found in request");
+    }
+
+    private BookingResponse mapToBookingResponse(Booking booking) {
+        return BookingResponse.builder()
+                .id(booking.getId())
+                .userId(booking.getUserId())
+                .spotId(booking.getSpotId())
+                .status(booking.getStatus())
+                .startTime(booking.getStartTime())
+                .endTime(booking.getEndTime())
+                .amount(booking.getAmount())
+                .vehicleNumber(booking.getVehicleNumber())
+                .vehicleType(booking.getVehicleType())
+                .createdAt(booking.getCreatedAt())
+                .build();
+    }
+
+    private VehicleSessionResponse mapToSessionResponse(
+            VehicleSession session) {
+        return VehicleSessionResponse.builder()
+                .id(session.getId())
+                .bookingId(session.getBookingId())
+                .entryGateId(session.getEntryGateId())
+                .exitGateId(session.getExitGateId())
+                .vehicleNumber(session.getVehicleNumber())
+                .entryTime(session.getEntryTime())
+                .exitTime(session.getExitTime())
+                .durationMinutes(session.getDurationMinutes())
+                .feeCharged(session.getFeeCharged())
+                .build();
+    }
+}
