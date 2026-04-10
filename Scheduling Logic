@@ -1,0 +1,424 @@
+Step 1 — Create OccupancyReport DTO
+Right-click com.parking.admin.dto.response → New → Java Class → OccupancyReportResponse
+javapackage com.parking.admin.dto.response;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class OccupancyReportResponse {
+    private LocalDateTime reportGeneratedAt;
+    private String lotId;
+    private String lotName;
+    private int totalSpotsInLot;
+    private int occupiedSpotsInLot;
+    private int availableSpotsInLot;
+    private double occupancyPercentage;
+    private List<LevelOccupancy> levelWiseData;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LevelOccupancy {
+        private String levelId;
+        private String levelLabel;
+        private int levelNumber;
+        private int totalSpots;
+        private int occupiedSpots;
+        private int availableSpots;
+        private double occupancyPercentage;
+        private List<SpotDetail> spotDetails;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SpotDetail {
+        private String spotId;
+        private String spotCode;
+        private String vehicleType;
+        private boolean isOccupied;
+        private boolean isReserved;
+    }
+}
+
+Step 2 — Add queries to existing Repositories
+Add to ParkingSpotRepository.java
+javapublic List<ParkingSpot> findByLevelIdAndOccupied(
+        String levelId, boolean isOccupied) {
+    String sql = """
+            SELECT * FROM parking_spots
+            WHERE level_id = ? AND is_occupied = ?
+            AND is_active = true
+            """;
+    return jdbcTemplate.query(sql, rowMapper,
+            levelId, isOccupied);
+}
+
+public int countByLevelId(String levelId) {
+    String sql = """
+            SELECT COUNT(*) FROM parking_spots
+            WHERE level_id = ? AND is_active = true
+            """;
+    Integer count = jdbcTemplate.queryForObject(
+            sql, Integer.class, levelId);
+    return count != null ? count : 0;
+}
+
+public int countByLevelIdAndOccupied(
+        String levelId, boolean isOccupied) {
+    String sql = """
+            SELECT COUNT(*) FROM parking_spots
+            WHERE level_id = ? AND is_occupied = ?
+            AND is_active = true
+            """;
+    Integer count = jdbcTemplate.queryForObject(
+            sql, Integer.class, levelId, isOccupied);
+    return count != null ? count : 0;
+}
+Add to ParkingLotRepository.java
+javapublic List<ParkingLot> findAllActive() {
+    String sql = """
+            SELECT * FROM parking_lots
+            WHERE is_active = true
+            ORDER BY name ASC
+            """;
+    return jdbcTemplate.query(sql, rowMapper);
+}
+
+Step 3 — Create OccupancyReportService.java
+Right-click com.parking.admin.service → New → Java Class → OccupancyReportService
+What this does: Contains the business logic to generate occupancy report. Called by both the Scheduler and the REST controller.
+javapackage com.parking.admin.service;
+
+import com.parking.admin.dto.response.OccupancyReportResponse;
+import com.parking.admin.model.ParkingLevel;
+import com.parking.admin.model.ParkingLot;
+import com.parking.admin.model.ParkingSpot;
+import com.parking.admin.repository.ParkingLevelRepository;
+import com.parking.admin.repository.ParkingLotRepository;
+import com.parking.admin.repository.ParkingSpotRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class OccupancyReportService {
+
+    private final ParkingLotRepository parkingLotRepository;
+    private final ParkingLevelRepository parkingLevelRepository;
+    private final ParkingSpotRepository parkingSpotRepository;
+
+    public List<OccupancyReportResponse> generateFullReport() {
+        log.info("Generating occupancy report at: {}",
+                LocalDateTime.now());
+
+        List<ParkingLot> activeLots =
+                parkingLotRepository.findAllActive();
+
+        return activeLots.stream()
+                .map(this::generateLotReport)
+                .toList();
+    }
+
+    public OccupancyReportResponse generateLotReport(
+            ParkingLot lot) {
+
+        List<ParkingLevel> levels =
+                parkingLevelRepository.findByLotId(lot.getId());
+
+        List<OccupancyReportResponse.LevelOccupancy> levelData =
+                levels.stream()
+                        .map(level -> generateLevelOccupancy(level))
+                        .toList();
+
+        int totalSpots = levelData.stream()
+                .mapToInt(OccupancyReportResponse
+                        .LevelOccupancy::getTotalSpots)
+                .sum();
+
+        int occupiedSpots = levelData.stream()
+                .mapToInt(OccupancyReportResponse
+                        .LevelOccupancy::getOccupiedSpots)
+                .sum();
+
+        int availableSpots = totalSpots - occupiedSpots;
+
+        double occupancyPct = totalSpots > 0
+                ? Math.round((double) occupiedSpots
+                        / totalSpots * 100.0 * 100.0) / 100.0
+                : 0.0;
+
+        return OccupancyReportResponse.builder()
+                .reportGeneratedAt(LocalDateTime.now())
+                .lotId(lot.getId())
+                .lotName(lot.getName())
+                .totalSpotsInLot(totalSpots)
+                .occupiedSpotsInLot(occupiedSpots)
+                .availableSpotsInLot(availableSpots)
+                .occupancyPercentage(occupancyPct)
+                .levelWiseData(levelData)
+                .build();
+    }
+
+    private OccupancyReportResponse.LevelOccupancy
+            generateLevelOccupancy(ParkingLevel level) {
+
+        List<ParkingSpot> allSpots =
+                parkingSpotRepository.findByLevelId(level.getId());
+
+        int total = allSpots.size();
+        int occupied = (int) allSpots.stream()
+                .filter(ParkingSpot::isOccupied)
+                .count();
+        int available = total - occupied;
+
+        double occupancyPct = total > 0
+                ? Math.round((double) occupied
+                        / total * 100.0 * 100.0) / 100.0
+                : 0.0;
+
+        List<OccupancyReportResponse.SpotDetail> spotDetails =
+                allSpots.stream()
+                        .map(spot ->
+                            OccupancyReportResponse.SpotDetail
+                                    .builder()
+                                    .spotId(spot.getId())
+                                    .spotCode(spot.getSpotCode())
+                                    .vehicleType(
+                                            spot.getVehicleType())
+                                    .isOccupied(spot.isOccupied())
+                                    .isReserved(spot.isReserved())
+                                    .build())
+                        .toList();
+
+        return OccupancyReportResponse.LevelOccupancy.builder()
+                .levelId(level.getId())
+                .levelLabel(level.getLabel())
+                .levelNumber(level.getLevelNumber())
+                .totalSpots(total)
+                .occupiedSpots(occupied)
+                .availableSpots(available)
+                .occupancyPercentage(occupancyPct)
+                .spotDetails(spotDetails)
+                .build();
+    }
+
+    public void logReport(
+            List<OccupancyReportResponse> reports) {
+
+        log.info("═══════════════════════════════════════");
+        log.info("   PARKING OCCUPANCY REPORT");
+        log.info("   Generated at: {}", LocalDateTime.now());
+        log.info("═══════════════════════════════════════");
+
+        reports.forEach(report -> {
+            log.info("LOT: {} | Total: {} | Occupied: {} | Available: {} | Occupancy: {}%",
+                    report.getLotName(),
+                    report.getTotalSpotsInLot(),
+                    report.getOccupiedSpotsInLot(),
+                    report.getAvailableSpotsInLot(),
+                    report.getOccupancyPercentage());
+
+            report.getLevelWiseData().forEach(level -> {
+                log.info("  ├─ Level {} ({}) | Total: {} | Occupied: {} | Available: {} | {}%",
+                        level.getLevelNumber(),
+                        level.getLevelLabel(),
+                        level.getTotalSpots(),
+                        level.getOccupiedSpots(),
+                        level.getAvailableSpots(),
+                        level.getOccupancyPercentage());
+
+                level.getSpotDetails().forEach(spot ->
+                    log.debug("  │    {} [{}] → {}",
+                            spot.getSpotCode(),
+                            spot.getVehicleType(),
+                            spot.isOccupied()
+                                    ? "OCCUPIED" : "AVAILABLE")
+                );
+            });
+
+            log.info("───────────────────────────────────────");
+        });
+    }
+}
+
+Step 4 — Create ParkingScheduler.java
+Right-click com.parking.admin.service → New → Java Class → ParkingScheduler
+What this does: Spring's @Scheduled annotation triggers the job automatically at fixed intervals. Uses fixedRate for every N milliseconds or cron for specific time patterns.
+javapackage com.parking.admin.service;
+
+import com.parking.admin.dto.response.OccupancyReportResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class ParkingScheduler {
+
+    private final OccupancyReportService occupancyReportService;
+
+    /**
+     * Runs every 5 minutes — generates occupancy report
+     * fixedRate = 300000ms = 5 minutes
+     * Change to any interval needed
+     */
+    @Scheduled(fixedRate = 300000)
+    public void generateOccupancyReport() {
+        log.info("Scheduler triggered — generating occupancy report");
+        try {
+            List<OccupancyReportResponse> reports =
+                    occupancyReportService.generateFullReport();
+            occupancyReportService.logReport(reports);
+            log.info("Occupancy report completed — {} lots processed",
+                    reports.size());
+        } catch (Exception e) {
+            log.error("Scheduler failed: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Runs every day at midnight — daily summary
+     * cron = second minute hour day month weekday
+     */
+    @Scheduled(cron = "0 0 0 * * *")
+    public void generateDailySummary() {
+        log.info("Daily summary scheduler triggered");
+        try {
+            List<OccupancyReportResponse> reports =
+                    occupancyReportService.generateFullReport();
+
+            int totalLots = reports.size();
+            int totalSpots = reports.stream()
+                    .mapToInt(
+                        OccupancyReportResponse::getTotalSpotsInLot)
+                    .sum();
+            int totalOccupied = reports.stream()
+                    .mapToInt(
+                        OccupancyReportResponse::getOccupiedSpotsInLot)
+                    .sum();
+
+            log.info("═══ DAILY SUMMARY ═══");
+            log.info("Total Lots    : {}", totalLots);
+            log.info("Total Spots   : {}", totalSpots);
+            log.info("Total Occupied: {}", totalOccupied);
+            log.info("Total Free    : {}", totalSpots - totalOccupied);
+            log.info("Overall Occ % : {}%",
+                    totalSpots > 0
+                        ? Math.round((double) totalOccupied
+                                / totalSpots * 100)
+                        : 0);
+            log.info("═════════════════════");
+
+        } catch (Exception e) {
+            log.error("Daily summary failed: {}", e.getMessage());
+        }
+    }
+}
+
+Step 5 — Enable Scheduling in AdminServiceApplication.java
+Open AdminServiceApplication.java and add @EnableScheduling:
+javapackage com.parking.admin;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.scheduling.annotation.EnableScheduling;
+
+@SpringBootApplication
+@EnableDiscoveryClient
+@EnableFeignClients
+@EnableScheduling
+public class AdminServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(
+                AdminServiceApplication.class, args);
+    }
+}
+
+Step 6 — Add REST Endpoint to Trigger Manually
+Right-click com.parking.admin.controller → New → Java Class → OccupancyReportController
+What this does: Allows manual triggering of the report via API — useful for testing without waiting for the scheduler interval.
+javapackage com.parking.admin.controller;
+
+import com.parking.admin.dto.response.ApiResponse;
+import com.parking.admin.dto.response.OccupancyReportResponse;
+import com.parking.admin.service.OccupancyReportService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/admin/reports")
+@RequiredArgsConstructor
+public class OccupancyReportController {
+
+    private final OccupancyReportService occupancyReportService;
+
+    @GetMapping("/occupancy")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_LOT_MANAGER')")
+    public ResponseEntity<ApiResponse<List<OccupancyReportResponse>>>
+            getOccupancyReport() {
+        log.info("Manual occupancy report requested");
+        List<OccupancyReportResponse> reports =
+                occupancyReportService.generateFullReport();
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Occupancy report generated", reports));
+    }
+
+    @GetMapping("/occupancy/lot/{lotId}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_LOT_MANAGER')")
+    public ResponseEntity<ApiResponse<OccupancyReportResponse>>
+            getLotOccupancyReport(
+                @PathVariable("lotId") String lotId) {
+        log.info("Lot occupancy report for: {}", lotId);
+        OccupancyReportResponse report =
+                occupancyReportService.generateLotReport(
+                        parkingLotRepository.findById(lotId)
+                                .orElseThrow());
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Lot report generated", report));
+    }
+}
+Wait — OccupancyReportController needs ParkingLotRepository. Add it:
+javaprivate final com.parking.admin.repository.ParkingLotRepository
+        parkingLotRepository;
+
+Step 7 — Add to application.yml in Admin Service
+yaml# Scheduler config
+spring:
+  task:
+    scheduling:
+      pool:
+        size: 5
