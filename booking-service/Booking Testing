@@ -1,0 +1,66 @@
+Step 3 — Test in Postman
+Test 1 — Login as user first
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+    "email": "rahul@gmail.com",
+    "password": "Password@123"
+}
+Copy the user token.
+
+Test 2 — Create Booking
+POST http://localhost:8080/api/bookings
+Authorization: Bearer <user_token>
+Content-Type: application/json
+
+{
+    "spotId": "<spot_id_from_admin_service>",
+    "vehicleNumber": "MH12AB1234",
+    "vehicleType": "FOUR_WHEELER",
+    "entryGateId": "<gate_id_from_admin_service>"
+}
+To get spotId and gateId — run these in MySQL Workbench:
+sqlSELECT id, spot_code, is_occupied FROM parking_spots LIMIT 5;
+SELECT id, gate_code, gate_type FROM entry_exit_gates LIMIT 5;
+
+Test 3 — Get Booking by ID
+GET http://localhost:8080/api/bookings/<booking_id>
+Authorization: Bearer <user_token>
+
+Test 4 — Get My Bookings (Paginated)
+GET http://localhost:8080/api/bookings/my-bookings?page=0&size=10
+Authorization: Bearer <user_token>
+
+Test 5 — Process Vehicle Exit
+POST http://localhost:8080/api/bookings/<booking_id>/exit
+Authorization: Bearer <user_token>
+Content-Type: application/json
+
+{
+    "exitGateId": "<gate_id>"
+}
+This will:
+
+Calculate fee based on duration
+Mark spot as available again
+Update booking to COMPLETED
+Publish Kafka event (if Kafka running)
+
+
+Test 6 — Cancel Booking (create new booking first)
+PUT http://localhost:8080/api/bookings/<booking_id>/cancel
+Authorization: Bearer <user_token>
+
+Test 7 — Verify in MySQL Workbench
+sql-- Check booking created
+SELECT id, status, vehicle_number, amount FROM bookings;
+
+-- Check spot is occupied
+SELECT id, spot_code, is_occupied FROM parking_spots;
+
+-- Check vehicle session
+SELECT id, booking_id, entry_time, exit_time, 
+       duration_minutes, fee_charged 
+FROM vehicle_sessions;
+
