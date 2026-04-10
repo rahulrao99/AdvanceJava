@@ -1,0 +1,58 @@
+package com.parking.admin.controller;
+
+import com.parking.admin.dto.response.ApiResponse;
+import com.parking.admin.dto.response.OccupancyReportResponse;
+import com.parking.admin.exception.ResourceNotFoundException;
+import com.parking.admin.repository.ParkingLotRepository;
+import com.parking.admin.service.OccupancyReportService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/admin/reports")
+@RequiredArgsConstructor
+public class OccupancyReportController {
+
+    private final OccupancyReportService occupancyReportService;
+    private final ParkingLotRepository parkingLotRepository;
+
+    @GetMapping("/occupancy")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_LOT_MANAGER')")
+    public ResponseEntity<ApiResponse<List<OccupancyReportResponse>>>
+            getOccupancyReport() {
+        log.info("Manual occupancy report requested");
+        List<OccupancyReportResponse> reports =
+                occupancyReportService.generateFullReport();
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Occupancy report generated", reports));
+    }
+
+    @GetMapping("/occupancy/lot/{lotId}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_LOT_MANAGER')")
+    public ResponseEntity<ApiResponse<OccupancyReportResponse>>
+            getLotOccupancyReport(
+                @PathVariable("lotId") String lotId) {
+        log.info("Lot occupancy report for: {}", lotId);
+
+        OccupancyReportResponse report =
+                occupancyReportService.generateLotReport(
+                        parkingLotRepository.findById(lotId)
+                                .orElseThrow(() ->
+                                        new ResourceNotFoundException(
+                                                "Lot not found: "
+                                                        + lotId)));
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Lot report generated", report));
+    }
+}
