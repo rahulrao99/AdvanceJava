@@ -1,0 +1,82 @@
+public VehicleSessionResponse processVehicleExit(
+        String bookingId,
+        VehicleExitRequest request) {
+
+    String token = getAuthToken();
+
+    Booking booking = bookingRepository.findById(bookingId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                    "Booking not found: " + bookingId));
+
+    if (!booking.getStatus().equals("ACTIVE")) {
+        throw new ResourceAlreadyExistsException(
+                "Booking is not active");
+    }
+
+    VehicleSession session = vehicleSessionRepository
+            .findByBookingId(bookingId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                    "Session not found for booking: " + bookingId));
+
+    // ── FIX: use absolute value to handle timezone diff ──
+    LocalDateTime entryTime = session.getEntryTime();
+    LocalDateTime exitTime = LocalDateTime.now();
+
+    long durationMinutes = Math.abs(
+            Duration.between(entryTime, exitTime).toMinutes());
+
+    // minimum 1 minute billing
+    if (durationMinutes == 0) {
+        durationMinutes = 1;
+    }
+
+    log.info("Entry: {} Exit: {} Duration: {} mins",
+            entryTime, exitTime, durationMinutes);
+    // ─────────────────────────────────────────────────────
+
+    String lotId = adminServiceClient
+            .getLotIdBySpotId(token, booking.getSpotId())
+            .getData();
+
+    List<FeeConfigResponse> feeConfigs = adminServiceClient
+            .getFeeConfigByLot(token, lotId)
+            .getData();
+
+    BigDecimal fee = calculateFee(
+            durationMinutes,
+            booking.getVehicleType(),
+            feeConfigs);
+
+    vehicleSessionRepository.updateExit(
+            bookingId,
+            request.getExitGateId(),
+            BigDecimal.valueOf(durationMinutes),
+            fee);
+
+    bookingRepository.updateStatusAndAmount(
+            bookingId, "COMPLETED", fee);
+
+    adminServiceClient.markSpotOccupied(
+            token, booking.getSpotId(), false);
+
+    try {
+        kafkaProducerService.publishVehicleExit(
+                BookingEvent.builder()
+                        .eventType("VEHICLE_EXIT")
+                        .bookingId(bookingId)
+                        .userId(booking.getUserId())
+                        .spotId(booking.getSpotId())
+                        .vehicleNumber(booking.getVehicleNumber())
+                        .amount(fee)
+                        .timestamp(LocalDateTime.now())
+                        .build());
+    } catch (Exception e) {
+        log.warn("Kafka publish failed: {}", e.getMessage());
+    }
+
+    return vehicleSessionRepository
+            .findByBookingId(bookingId)
+            .map(this::mapToSessionResponse)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                    "Session not found after exit"));
+}
