@@ -1,0 +1,122 @@
+package com.parking.admin.repository;
+
+import com.parking.admin.model.ParkingLot;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+@Slf4j
+@Repository
+@RequiredArgsConstructor
+public class ParkingLotRepository {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    private final RowMapper<ParkingLot> rowMapper = (rs, rowNum) ->
+            ParkingLot.builder()
+                    .id(rs.getString("id"))
+                    .name(rs.getString("name"))
+                    .address(rs.getString("address"))
+                    .latitude(rs.getDouble("latitude"))
+                    .longitude(rs.getDouble("longitude"))
+                    .totalLevels(rs.getInt("total_levels"))
+                    .isActive(rs.getBoolean("is_active"))
+                    .createdAt(rs.getTimestamp("created_at")
+                            .toLocalDateTime())
+                    .updatedAt(rs.getTimestamp("updated_at")
+                            .toLocalDateTime())
+                    .build();
+
+    public void save(ParkingLot lot) {
+        log.debug("Saving parking lot: {}", lot.getName());
+        String sql = """
+                INSERT INTO parking_lots
+                (id, name, address, latitude, longitude,
+                 total_levels, is_active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                """;
+        jdbcTemplate.update(sql,
+                lot.getId(),
+                lot.getName(),
+                lot.getAddress(),
+                lot.getLatitude(),
+                lot.getLongitude(),
+                lot.getTotalLevels(),
+                lot.isActive()
+        );
+    }
+
+    public Optional<ParkingLot> findById(String id) {
+        log.debug("Finding parking lot by id: {}", id);
+        String sql = "SELECT * FROM parking_lots WHERE id = ?";
+        return jdbcTemplate.query(sql, rowMapper, id)
+                .stream().findFirst();
+    }
+
+    public List<ParkingLot> findAll(int offset, int size) {
+        log.debug("Fetching parking lots offset: {}", offset);
+        String sql = """
+                SELECT * FROM parking_lots
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+                """;
+        return jdbcTemplate.query(sql, rowMapper, size, offset);
+    }
+
+    public List<ParkingLot> findAllActive() {
+        log.debug("Fetching all active parking lots");
+        String sql = """
+                SELECT * FROM parking_lots
+                WHERE is_active = true
+                ORDER BY name ASC
+                """;
+        return jdbcTemplate.query(sql, rowMapper);
+    }
+
+    public long countAll() {
+        String sql = "SELECT COUNT(*) FROM parking_lots";
+        Long count = jdbcTemplate.queryForObject(
+                sql, Long.class);
+        return count != null ? count : 0;
+    }
+
+    public void update(ParkingLot lot) {
+        log.debug("Updating parking lot: {}", lot.getId());
+        String sql = """
+                UPDATE parking_lots
+                SET name = ?, address = ?,
+                    latitude = ?, longitude = ?,
+                    total_levels = ?, updated_at = NOW()
+                WHERE id = ?
+                """;
+        jdbcTemplate.update(sql,
+                lot.getName(),
+                lot.getAddress(),
+                lot.getLatitude(),
+                lot.getLongitude(),
+                lot.getTotalLevels(),
+                lot.getId()
+        );
+    }
+
+    public void deleteById(String id) {
+        log.debug("Deleting parking lot: {}", id);
+        String sql = "DELETE FROM parking_lots WHERE id = ?";
+        jdbcTemplate.update(sql, id);
+    }
+
+    public boolean existsByName(String name) {
+        String sql = """
+                SELECT COUNT(*) FROM parking_lots
+                WHERE name = ?
+                """;
+        Integer count = jdbcTemplate.queryForObject(
+                sql, Integer.class, name);
+        return count != null && count > 0;
+    }
+}
