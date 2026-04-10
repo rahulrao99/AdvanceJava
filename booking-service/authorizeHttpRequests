@@ -1,0 +1,15 @@
+.authorizeHttpRequests(auth -> auth
+    .requestMatchers("/actuator/**").permitAll()
+    .requestMatchers(
+        "/api/admin/spots/*/lot",
+        "/api/admin/spots/*/occupy",
+        "/api/admin/lots/*/fees",
+        "/api/admin/spots/*"
+    ).authenticated()
+    .requestMatchers("/api/admin/**")
+        .hasAnyAuthority(
+            "ROLE_ADMIN",
+            "ROLE_LOT_MANAGER"
+        )
+    .anyRequest().authenticated()
+)
