@@ -1,0 +1,3 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/vehicle_parking_db?useSSL=false&serverTimezone=Asia/Kolkata&allowPublicKeyRetrieval=true
