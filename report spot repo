@@ -1,0 +1,32 @@
+public List<ParkingSpot> findByLevelIdAndOccupied(
+        String levelId, boolean isOccupied) {
+    String sql = """
+            SELECT * FROM parking_spots
+            WHERE level_id = ? AND is_occupied = ?
+            AND is_active = true
+            """;
+    return jdbcTemplate.query(sql, rowMapper,
+            levelId, isOccupied);
+}
+
+public int countByLevelId(String levelId) {
+    String sql = """
+            SELECT COUNT(*) FROM parking_spots
+            WHERE level_id = ? AND is_active = true
+            """;
+    Integer count = jdbcTemplate.queryForObject(
+            sql, Integer.class, levelId);
+    return count != null ? count : 0;
+}
+
+public int countByLevelIdAndOccupied(
+        String levelId, boolean isOccupied) {
+    String sql = """
+            SELECT COUNT(*) FROM parking_spots
+            WHERE level_id = ? AND is_occupied = ?
+            AND is_active = true
+            """;
+    Integer count = jdbcTemplate.queryForObject(
+            sql, Integer.class, levelId, isOccupied);
+    return count != null ? count : 0;
+}
