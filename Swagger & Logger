@@ -1,0 +1,486 @@
+Part 1 — Swagger / OpenAPI Setup
+What Swagger Does
+
+Auto-generates interactive API documentation
+Available at http://localhost:{port}/swagger-ui.html
+Shows all endpoints, request/response formats
+Allows testing APIs directly from browser
+
+
+Step 1 — Add Swagger Config to Each Service
+Create SwaggerConfig.java in each service's config package.
+User Service — com.parking.user.config
+javapackage com.parking.user.config;
+
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class SwaggerConfig {
+
+    @Bean
+    public OpenAPI openAPI() {
+        return new OpenAPI()
+                .info(new Info()
+                        .title("User Service API")
+                        .description(
+                            "User Management Service — " +
+                            "Registration, Login, JWT Auth, " +
+                            "Profile Management")
+                        .version("1.0.0")
+                        .contact(new Contact()
+                                .name("Rahul Rajesh Rao")
+                                .email("rahul@parking.com")))
+                .addSecurityItem(
+                        new SecurityRequirement()
+                                .addList("Bearer Authentication"))
+                .components(new Components()
+                        .addSecuritySchemes(
+                                "Bearer Authentication",
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.HTTP)
+                                        .scheme("bearer")
+                                        .bearerFormat("JWT")
+                                        .name("Bearer Authentication")
+                                        .description(
+                                            "Enter JWT token " +
+                                            "without Bearer prefix")));
+    }
+}
+
+Admin Service — com.parking.admin.config
+Same file — just change title and description:
+javapackage com.parking.admin.config;
+
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class SwaggerConfig {
+
+    @Bean
+    public OpenAPI openAPI() {
+        return new OpenAPI()
+                .info(new Info()
+                        .title("Admin Service API")
+                        .description(
+                            "Admin Panel Service — " +
+                            "Parking Lot, Level, Spot, " +
+                            "Gate and Fee Management")
+                        .version("1.0.0")
+                        .contact(new Contact()
+                                .name("Rahul Rajesh Rao")
+                                .email("rahul@parking.com")))
+                .addSecurityItem(
+                        new SecurityRequirement()
+                                .addList("Bearer Authentication"))
+                .components(new Components()
+                        .addSecuritySchemes(
+                                "Bearer Authentication",
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.HTTP)
+                                        .scheme("bearer")
+                                        .bearerFormat("JWT")
+                                        .name("Bearer Authentication")
+                                        .description(
+                                            "Enter JWT token " +
+                                            "without Bearer prefix")));
+    }
+}
+
+Booking Service — com.parking.booking.config
+javapackage com.parking.booking.config;
+
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class SwaggerConfig {
+
+    @Bean
+    public OpenAPI openAPI() {
+        return new OpenAPI()
+                .info(new Info()
+                        .title("Booking Service API")
+                        .description(
+                            "Booking Service — " +
+                            "Create Bookings, Vehicle Entry/Exit, " +
+                            "Fee Calculation, Cancellation")
+                        .version("1.0.0")
+                        .contact(new Contact()
+                                .name("Rahul Rajesh Rao")
+                                .email("rahul@parking.com")))
+                .addSecurityItem(
+                        new SecurityRequirement()
+                                .addList("Bearer Authentication"))
+                .components(new Components()
+                        .addSecuritySchemes(
+                                "Bearer Authentication",
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.HTTP)
+                                        .scheme("bearer")
+                                        .bearerFormat("JWT")
+                                        .name("Bearer Authentication")
+                                        .description(
+                                            "Enter JWT token " +
+                                            "without Bearer prefix")));
+    }
+}
+
+Payment Service — com.parking.payment.config
+javapackage com.parking.payment.config;
+
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class SwaggerConfig {
+
+    @Bean
+    public OpenAPI openAPI() {
+        return new OpenAPI()
+                .info(new Info()
+                        .title("Payment Service API")
+                        .description(
+                            "Payment Service — " +
+                            "Initiate Payments, Track Status, " +
+                            "Payment History")
+                        .version("1.0.0")
+                        .contact(new Contact()
+                                .name("Rahul Rajesh Rao")
+                                .email("rahul@parking.com")))
+                .addSecurityItem(
+                        new SecurityRequirement()
+                                .addList("Bearer Authentication"))
+                .components(new Components()
+                        .addSecuritySchemes(
+                                "Bearer Authentication",
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.HTTP)
+                                        .scheme("bearer")
+                                        .bearerFormat("JWT")
+                                        .name("Bearer Authentication")
+                                        .description(
+                                            "Enter JWT token " +
+                                            "without Bearer prefix")));
+    }
+}
+
+Step 2 — Add @Operation and @Tag annotations to Controllers
+This adds descriptions to each endpoint in Swagger UI.
+Example — AuthController.java (User Service)
+Add these imports:
+javaimport io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+Add @Tag on class and @Operation on each method:
+java@Tag(name = "Authentication",
+     description = "APIs for user registration and login")
+@RestController
+@RequestMapping("/api/auth")
+@RequiredArgsConstructor
+@Slf4j
+public class AuthController {
+
+    @Operation(
+        summary = "Register new user",
+        description = "Creates a new user account with ROLE_USER. " +
+                      "No authentication required.")
+    @PostMapping("/register")
+    public ResponseEntity<com.parking.user.dto.response
+            .ApiResponse<UserResponse>> register(
+            @Valid @RequestBody RegisterRequest request) {
+        // existing code
+    }
+
+    @Operation(
+        summary = "Login",
+        description = "Authenticates user and returns JWT token. " +
+                      "Use the token in Authorization header " +
+                      "as: Bearer <token>")
+    @PostMapping("/login")
+    public ResponseEntity<com.parking.user.dto.response
+            .ApiResponse<AuthResponse>> login(
+            @Valid @RequestBody LoginRequest request) {
+        // existing code
+    }
+
+    @Operation(
+        summary = "Register admin",
+        description = "Creates admin user. " +
+                      "Only existing ROLE_ADMIN can call this.")
+    @PostMapping("/register-admin")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<com.parking.user.dto.response
+            .ApiResponse<UserResponse>> registerAdmin(
+            @Valid @RequestBody RegisterRequest request) {
+        // existing code
+    }
+
+    @Operation(
+        summary = "Register lot manager",
+        description = "Creates lot manager. " +
+                      "Only ROLE_ADMIN can call this.")
+    @PostMapping("/register-lot-manager")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<com.parking.user.dto.response
+            .ApiResponse<UserResponse>> registerLotManager(
+            @Valid @RequestBody RegisterRequest request) {
+        // existing code
+    }
+}
+Example — BookingController.java
+java@Tag(name = "Booking",
+     description = "APIs for parking spot booking management")
+@RestController
+@RequestMapping("/api/bookings")
+@RequiredArgsConstructor
+@Slf4j
+public class BookingController {
+
+    @Operation(
+        summary = "Create booking",
+        description = "Books a parking spot. " +
+                      "Spot availability is checked in real-time " +
+                      "via Admin Service. JWT token required.")
+    @PostMapping
+    public ResponseEntity<...> createBooking(...) { }
+
+    @Operation(
+        summary = "Get booking by ID",
+        description = "Fetch booking details by booking ID.")
+    @GetMapping("/{bookingId}")
+    public ResponseEntity<...> getBooking(...) { }
+
+    @Operation(
+        summary = "Get my bookings",
+        description = "Paginated list of all bookings " +
+                      "for the logged-in user.")
+    @GetMapping("/my-bookings")
+    public ResponseEntity<...> getMyBookings(...) { }
+
+    @Operation(
+        summary = "Cancel booking",
+        description = "Cancels an active booking. " +
+                      "Spot is immediately released.")
+    @PutMapping("/{bookingId}/cancel")
+    public ResponseEntity<...> cancelBooking(...) { }
+
+    @Operation(
+        summary = "Vehicle exit",
+        description = "Records vehicle exit. Calculates fee " +
+                      "based on duration and fee_config. " +
+                      "Updates booking to COMPLETED.")
+    @PostMapping("/{bookingId}/exit")
+    public ResponseEntity<...> processExit(...) { }
+}
+
+Step 3 — Allow Swagger UI in Security Config
+In each service's SecurityConfig.java add Swagger URLs to permitted paths:
+java.authorizeHttpRequests(auth -> auth
+    .requestMatchers(
+        "/swagger-ui/**",
+        "/swagger-ui.html",
+        "/v3/api-docs/**",
+        "/v3/api-docs",
+        "/actuator/**"
+    ).permitAll()
+    // existing rules below
+    .requestMatchers("/api/auth/**").permitAll()
+    .anyRequest().authenticated()
+)
+Do this for all 4 services — User, Admin, Booking, Payment.
+
+Step 4 — Add to application.yml of each service
+yamlspringdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+
+Step 5 — Test Swagger UI
+After restarting each service open in browser:
+User Service    → http://localhost:8081/swagger-ui.html
+Admin Service   → http://localhost:8082/swagger-ui.html
+Booking Service → http://localhost:8083/swagger-ui.html
+Payment Service → http://localhost:8084/swagger-ui.html
+You'll see a beautiful interactive API documentation page!
+
+Part 2 — Logging with MDC (Trace ID)
+What MDC Does
+MDC (Mapped Diagnostic Context) adds a unique traceId to every log line so you can trace a single request across multiple services.
+Without MDC:
+INFO --- Creating booking for user: abc123
+
+With MDC:
+INFO --- [traceId=REQ-7f3a] Creating booking for user: abc123
+INFO --- [traceId=REQ-7f3a] Calling admin service for spot
+INFO --- [traceId=REQ-7f3a] Spot fetched successfully
+INFO --- [traceId=REQ-7f3a] Booking saved to DB
+
+Step 1 — Create MdcFilter.java in each service
+Create in filter package of each service:
+MdcFilter.java — User Service
+javapackage com.parking.user.filter;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
+import org.springframework.core.annotation.Order;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+import java.util.UUID;
+
+@Slf4j
+@Component
+@Order(1)
+public class MdcFilter extends OncePerRequestFilter {
+
+    private static final String TRACE_ID = "traceId";
+    private static final String SERVICE  = "service";
+
+    @Override
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain)
+            throws ServletException, IOException {
+
+        String traceId = "REQ-" + UUID.randomUUID()
+                .toString().substring(0, 8).toUpperCase();
+
+        try {
+            MDC.put(TRACE_ID, traceId);
+            MDC.put(SERVICE, "user-service");
+
+            response.setHeader("X-Trace-Id", traceId);
+
+            log.debug("Request: {} {} [traceId={}]",
+                    request.getMethod(),
+                    request.getRequestURI(),
+                    traceId);
+
+            filterChain.doFilter(request, response);
+
+            log.debug("Response: {} [traceId={}]",
+                    response.getStatus(), traceId);
+
+        } finally {
+            MDC.clear();
+        }
+    }
+}
+Create same file in:
+
+com.parking.admin.filter.MdcFilter — change SERVICE to admin-service
+com.parking.booking.filter.MdcFilter — change SERVICE to booking-service
+com.parking.payment.filter.MdcFilter — change SERVICE to payment-service
+
+
+Step 2 — Update logback.xml to show traceId
+Create file: src/main/resources/logback-spring.xml in each service:
+xml<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <springProperty scope="context"
+                    name="appName"
+                    source="spring.application.name"/>
+
+    <appender name="CONSOLE"
+              class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>
+%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] [${appName}] %logger{36} - %msg%n
+            </pattern>
+        </encoder>
+    </appender>
+
+    <appender name="FILE"
+              class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/${appName}.log</file>
+        <rollingPolicy
+            class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>
+                logs/${appName}-%d{yyyy-MM-dd}.log
+            </fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>
+%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] [${appName}] %logger{36} - %msg%n
+            </pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+
+    <logger name="com.parking" level="DEBUG"/>
+    <logger name="org.springframework.security" level="INFO"/>
+    <logger name="org.springframework.jdbc" level="DEBUG"/>
+
+</configuration>
+
+Step 3 — Update application.yml logging section
+Replace the existing logging section in each service:
+yamllogging:
+  level:
+    com.parking: DEBUG
+    org.springframework.security: INFO
+    org.springframework.jdbc: DEBUG
+    org.springframework.web: INFO
+    org.hibernate: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId}] %logger{36} - %msg%n"
+  file:
+    name: logs/${spring.application.name}.log
+
+After All Changes — Log Output Will Look Like
+2026-04-11 12:00:00.123 [http-nio-8081-exec-1] INFO  [REQ-7F3A1B2C] [user-service] c.p.u.controller.AuthController - Register request for email: rahul@gmail.com
+2026-04-11 12:00:00.145 [http-nio-8081-exec-1] DEBUG [REQ-7F3A1B2C] [user-service] c.p.u.service.UserService - Registering new user: rahul@gmail.com
+2026-04-11 12:00:00.167 [http-nio-8081-exec-1] DEBUG [REQ-7F3A1B2C] [user-service] c.p.u.repository.UserRepository - Saving user: rahul@gmail.com
+2026-04-11 12:00:00.189 [http-nio-8081-exec-1] INFO  [REQ-7F3A1B2C] [user-service] c.p.u.service.UserService - User registered: abc-123
+Every line has the same traceId so you can filter by it!
+
+Summary for Evaluator
+Swagger:
+
+"SpringDoc OpenAPI 2.5.0 is configured in each service via SwaggerConfig.java. JWT Bearer authentication is configured in the Swagger UI so evaluators can test protected endpoints directly from the browser without Postman. Each controller has @Tag for grouping and @Operation for endpoint descriptions. Swagger UI is accessible at /swagger-ui.html on each service port."
+
+Logging:
+
+"SLF4J with Logback is configured across all services. MDC (Mapped Diagnostic Context) adds a unique traceId to every request — this trace ID appears in every log line for that request, making it easy to trace a single user action across multiple service logs. Logs are written to both console and rolling file (one file per day, kept for 7 days). Four log levels are used: DEBUG for SQL queries and internal flow, INFO for business events, WARN for recoverable issues like Kafka failures, ERROR for 
