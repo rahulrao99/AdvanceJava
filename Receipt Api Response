@@ -1,0 +1,149 @@
+The errors are because these are missing:
+1 — ApiResponse.java is missing in receipt service
+Right-click com.parking.receipt.dto.response → New → Java Class → ApiResponse
+javapackage com.parking.receipt.dto.response;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class ApiResponse<T> {
+
+    private boolean success;
+    private String message;
+    private T data;
+    private String error;
+    private LocalDateTime timestamp;
+
+    public static <T> ApiResponse<T> success(
+            String message, T data) {
+        return ApiResponse.<T>builder()
+                .success(true)
+                .message(message)
+                .data(data)
+                .timestamp(LocalDateTime.now())
+                .build();
+    }
+
+    public static <T> ApiResponse<T> success(String message) {
+        return ApiResponse.<T>builder()
+                .success(true)
+                .message(message)
+                .timestamp(LocalDateTime.now())
+                .build();
+    }
+
+    public static <T> ApiResponse<T> failure(String error) {
+        return ApiResponse.<T>builder()
+                .success(false)
+                .error(error)
+                .timestamp(LocalDateTime.now())
+                .build();
+    }
+}
+
+2 — Complete GlobalExceptionHandler.java
+Replace entire content:
+javapackage com.parking.receipt.exception;
+
+import com.parking.receipt.dto.response.ApiResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@Slf4j
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotFound(
+            ResourceNotFoundException ex) {
+        log.error("Resource not found: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.failure(ex.getMessage()));
+    }
+
+    @ExceptionHandler(ResourceAlreadyExistsException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAlreadyExists(
+            ResourceAlreadyExistsException ex) {
+        log.error("Resource already exists: {}",
+                ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ApiResponse.failure(ex.getMessage()));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>>
+            handleValidation(
+                MethodArgumentNotValidException ex) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getAllErrors().forEach(error -> {
+            String fieldName = ((FieldError) error).getField();
+            String message = error.getDefaultMessage();
+            errors.put(fieldName, message);
+        });
+        log.error("Validation failed: {}", errors);
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.<Map<String, String>>builder()
+                        .success(false)
+                        .error("Validation failed")
+                        .data(errors)
+                        .build());
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleGeneral(
+            Exception ex) {
+        log.error("Unexpected error: {}",
+                ex.getMessage(), ex);
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.failure(
+                        "Something went wrong"));
+    }
+}
+
+3 — Also check these files exist
+Make sure you have created:
+com.parking.receipt.exception.ResourceNotFoundException
+com.parking.receipt.exception.ResourceAlreadyExistsException
+com.parking.receipt.security.JwtUtil
+com.parking.receipt.filter.JwtAuthFilter
+com.parking.receipt.config.SecurityConfig
+com.parking.receipt.config.SwaggerConfig  (optional)
+com.parking.receipt.model.Receipt
+com.parking.receipt.repository.ReceiptRepository
+com.parking.receipt.service.ReceiptService
+com.parking.receipt.controller.ReceiptController
+com.parking.receipt.kafka.BookingEvent
+com.parking.receipt.kafka.ReceiptKafkaConsumer
+com.parking.receipt.feign.BookingServiceClient
+com.parking.receipt.ReceiptServiceApplication
+
+4 — After creating ApiResponse
+
+Ctrl + F9 → Rebuild
+Red errors should disappear
+Start Receipt Service ▶
+
+
+Tell me once errors are gone and Receipt Service starts — then we test the complete flow! 🚀2 / 2
