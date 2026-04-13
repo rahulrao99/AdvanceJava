@@ -1,0 +1,1019 @@
+
+Step 1 → Redis Setup & Caching (existing services)
+Step 2 → Receipt Service (new service port 8086)
+Step 3 → Connect everything
+Step 4 → Test complete flow
+
+Part 1 — Redis Setup
+Step 1 — Install Redis on Windows
+Since Redis doesn't have official Windows support, we use Memurai (Redis-compatible for Windows):
+
+Go to: https://www.memurai.com/get-memurai
+Download Memurai Developer (free)
+Install it — runs as Windows service automatically
+Verify in Command Prompt:
+
+bashmemurai-cli ping
+Should respond: PONG
+OR use this simpler approach — download Redis for Windows:
+
+Go to: https://github.com/microsoftarchive/redis/releases
+Download Redis-x64-3.2.100.msi
+Install → Redis starts as Windows service
+Verify:
+
+bashredis-cli ping
+Should respond: PONG
+
+Step 2 — Add Redis Config to User Service
+Open user-service → src → main → resources → application.yml
+Add Redis config:
+yamlspring:
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 1800000
+      cache-null-values: false
+
+Step 3 — Add Redis Config class to User Service
+Right-click com.parking.user.config → New → Java Class → RedisConfig
+What this does: Configures Redis connection and cache settings. Uses Jackson for JSON serialization so objects are stored as readable JSON in Redis.
+javapackage com.parking.user.config;
+
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.cache.RedisCacheConfiguration;
+import org.springframework.data.redis.cache.RedisCacheManager;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.RedisSerializationContext;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
+
+import java.time.Duration;
+
+@Configuration
+@EnableCaching
+public class RedisConfig {
+
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(
+            RedisConnectionFactory factory) {
+        RedisTemplate<String, Object> template =
+                new RedisTemplate<>();
+        template.setConnectionFactory(factory);
+        template.setKeySerializer(
+                new StringRedisSerializer());
+        template.setValueSerializer(
+                new GenericJackson2JsonRedisSerializer());
+        template.setHashKeySerializer(
+                new StringRedisSerializer());
+        template.setHashValueSerializer(
+                new GenericJackson2JsonRedisSerializer());
+        return template;
+    }
+
+    @Bean
+    public RedisCacheManager cacheManager(
+            RedisConnectionFactory factory) {
+
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+        mapper.disable(
+                SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        mapper.activateDefaultTyping(
+                mapper.getPolymorphicTypeValidator(),
+                ObjectMapper.DefaultTyping.NON_FINAL,
+                JsonTypeInfo.As.PROPERTY);
+
+        GenericJackson2JsonRedisSerializer serializer =
+                new GenericJackson2JsonRedisSerializer(mapper);
+
+        RedisCacheConfiguration config =
+                RedisCacheConfiguration.defaultCacheConfig()
+                        .entryTtl(Duration.ofMinutes(30))
+                        .serializeKeysWith(
+                                RedisSerializationContext
+                                        .SerializationPair
+                                        .fromSerializer(
+                                            new StringRedisSerializer()))
+                        .serializeValuesWith(
+                                RedisSerializationContext
+                                        .SerializationPair
+                                        .fromSerializer(serializer))
+                        .disableCachingNullValues();
+
+        return RedisCacheManager.builder(factory)
+                .cacheDefaults(config)
+                .build();
+    }
+}
+
+Step 4 — Add Caching to User Service
+Open UserService.java and add @Cacheable and @CacheEvict:
+What this does: @Cacheable — on first call fetches from DB and stores in Redis. Subsequent calls return from Redis without hitting DB. @CacheEvict — when profile is updated, removes old cached data so next fetch gets fresh data from DB.
+javapackage com.parking.user.service;
+
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+// ... other imports
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class UserService {
+
+    // ... existing fields
+
+    public UserResponse register(RegisterRequest request) {
+        // ... existing code unchanged
+    }
+
+    public AuthResponse login(LoginRequest request) {
+        // ... existing code unchanged
+    }
+
+    @Cacheable(value = "userProfiles", key = "#userId")
+    public UserResponse getProfile(String userId) {
+        log.info("Fetching profile from DB for: {}", userId);
+        return userRepository.findById(userId)
+                .map(this::mapToUserResponse)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found"));
+    }
+
+    @CacheEvict(value = "userProfiles", key = "#userId")
+    public UserResponse updateProfile(String userId,
+                                       UpdateProfileRequest request) {
+        log.info("Updating profile for: {} — cache cleared",
+                userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found"));
+
+        if (request.getUsername() != null
+                && !request.getUsername()
+                        .equals(user.getUsername())) {
+            if (userRepository.existsByUsername(
+                    request.getUsername())) {
+                throw new ResourceAlreadyExistsException(
+                        "Username already taken");
+            }
+            user.setUsername(request.getUsername());
+        }
+
+        if (request.getPhone() != null) {
+            user.setPhone(request.getPhone());
+        }
+
+        userRepository.update(user);
+
+        return mapToUserResponse(
+                userRepository.findById(userId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "User not found")));
+    }
+
+    // ... rest of existing code unchanged
+}
+
+Step 5 — Add Redis to Admin Service
+Same RedisConfig.java — just change package to com.parking.admin.config.
+Add to admin-service/application.yml:
+yamlspring:
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+  cache:
+    type: redis
+    redis:
+      time-to-live: 300000
+      cache-null-values: false
+Add caching to GateService.java:
+java@Cacheable(value = "gatesByLot", key = "#lotId")
+public List<GateResponse> getGatesByLot(String lotId) {
+    log.info("Fetching gates from DB for lot: {}", lotId);
+    parkingLotRepository.findById(lotId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                    "Parking lot not found: " + lotId));
+    return gateRepository.findByLotId(lotId)
+            .stream()
+            .map(this::mapToResponse)
+            .toList();
+}
+
+@CacheEvict(value = "gatesByLot", key = "#lotId")
+public GateResponse addGate(String lotId,
+                             GateRequest request) {
+    // existing code
+}
+Add caching to FeeConfigService.java:
+java@Cacheable(value = "feeConfigByLot", key = "#lotId")
+public List<FeeConfigResponse> getFeeConfigByLot(
+        String lotId) {
+    log.info("Fetching fee config from DB for lot: {}",
+            lotId);
+    // existing code
+}
+
+@CacheEvict(value = "feeConfigByLot", key = "#lotId")
+public FeeConfigResponse createFeeConfig(String lotId,
+        FeeConfigRequest request) {
+    // existing code
+}
+Add caching to ParkingSpotService.java:
+java@Cacheable(value = "spotAvailability", key = "#spotId")
+public ParkingSpotResponse getSpotById(String spotId) {
+    log.info("Fetching spot from DB: {}", spotId);
+    return parkingSpotRepository.findById(spotId)
+            .map(this::mapToResponse)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                    "Spot not found: " + spotId));
+}
+
+@CacheEvict(value = "spotAvailability", key = "#spotId")
+public void updateOccupiedStatus(String spotId,
+                                  boolean isOccupied) {
+    // existing code
+}
+
+Part 2 — Receipt Service
+Step 1 — Generate from start.spring.io
+FieldValueGroupcom.parkingArtifactreceipt-servicePackagecom.parking.receiptJava21Spring Boot3.2.5
+Dependencies:
+
+Spring Web
+Spring Security
+Eureka Discovery Client
+Spring Data JDBC
+MySQL Driver
+Validation
+Lombok
+Spring Boot Actuator
+Flyway Migration
+Spring for Apache Kafka
+
+Generate → extract → move to repo folder.
+
+Step 2 — Fix receipt-service/pom.xml
+Replace entire content:
+xml<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.parking</groupId>
+        <artifactId>vehicle-parking-management</artifactId>
+        <version>1.0.0</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>receipt-service</artifactId>
+    <name>receipt-service</name>
+    <description>Receipt Service for Vehicle Parking</description>
+
+    <properties>
+        <java.version>21</java.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.11.5</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.5.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+
+Step 3 — Create package structure
+com.parking.receipt.config
+com.parking.receipt.controller
+com.parking.receipt.dto.request
+com.parking.receipt.dto.response
+com.parking.receipt.exception
+com.parking.receipt.feign
+com.parking.receipt.filter
+com.parking.receipt.kafka
+com.parking.receipt.model
+com.parking.receipt.repository
+com.parking.receipt.security
+com.parking.receipt.service
+
+Step 4 — application.yml
+yamlserver:
+  port: 8086
+
+spring:
+  application:
+    name: receipt-service
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/vehicle_parking_db?useSSL=false&serverTimezone=Asia/Kolkata&allowPublicKeyRetrieval=true
+    username: root
+    password: your_mysql_password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  flyway:
+    enabled: false
+
+  cache:
+    type: none
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: receipt-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: false
+    hostname: localhost
+    instance-id: ${spring.application.name}:${server.port}
+
+jwt:
+  secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+  expiration: 86400000
+
+logging:
+  level:
+    com.parking.receipt: DEBUG
+    org.springframework.security: INFO
+    org.springframework.kafka: INFO
+
+Step 5 — Add route in API Gateway
+Open api-gateway/application.yml and verify:
+yaml- id: receipt-service
+  uri: lb://receipt-service
+  predicates:
+    - Path=/api/receipts/**
+  filters:
+    - StripPrefix=0
+
+Step 6 — Model
+Right-click com.parking.receipt.model → New → Java Class → Receipt
+javapackage com.parking.receipt.model;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class Receipt {
+    private String id;
+    private String bookingId;
+    private String sessionId;
+    private String receiptType;
+    private String receiptNumber;
+    private String vehicleNumber;
+    private String vehicleType;
+    private String spotCode;
+    private String lotName;
+    private String levelLabel;
+    private String entryGateCode;
+    private String exitGateCode;
+    private LocalDateTime entryTime;
+    private LocalDateTime exitTime;
+    private Long durationMinutes;
+    private java.math.BigDecimal feeCharged;
+    private boolean emailSent;
+    private LocalDateTime generatedAt;
+}
+
+Step 7 — DTOs
+Right-click com.parking.receipt.dto.response → New → Java Class → ReceiptResponse
+javapackage com.parking.receipt.dto.response;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ReceiptResponse {
+    private String id;
+    private String bookingId;
+    private String receiptType;
+    private String receiptNumber;
+    private String vehicleNumber;
+    private String vehicleType;
+    private String spotCode;
+    private String lotName;
+    private String levelLabel;
+    private String entryGateCode;
+    private String exitGateCode;
+    private LocalDateTime entryTime;
+    private LocalDateTime exitTime;
+    private Long durationMinutes;
+    private BigDecimal feeCharged;
+    private boolean emailSent;
+    private LocalDateTime generatedAt;
+}
+Copy ApiResponse.java and PageResponse.java from Booking Service — just change package to com.parking.receipt.dto.response.
+
+Step 8 — Kafka Event DTO
+Right-click com.parking.receipt.kafka → New → Java Class → BookingEvent
+javapackage com.parking.receipt.kafka;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class BookingEvent {
+    private String eventType;
+    private String bookingId;
+    private String userId;
+    private String spotId;
+    private String vehicleNumber;
+    private String vehicleType;
+    private BigDecimal amount;
+    private LocalDateTime timestamp;
+}
+
+Step 9 — Repository
+Right-click com.parking.receipt.repository → New → Java Class → ReceiptRepository
+javapackage com.parking.receipt.repository;
+
+import com.parking.receipt.model.Receipt;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+@Slf4j
+@Repository
+@RequiredArgsConstructor
+public class ReceiptRepository {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    private final RowMapper<Receipt> rowMapper = (rs, rowNum) ->
+            Receipt.builder()
+                    .id(rs.getString("id"))
+                    .bookingId(rs.getString("booking_id"))
+                    .sessionId(rs.getString("session_id"))
+                    .receiptType(rs.getString("receipt_type"))
+                    .emailSent(rs.getBoolean("email_sent"))
+                    .generatedAt(rs.getTimestamp("generated_at")
+                            .toLocalDateTime())
+                    .build();
+
+    public void save(Receipt receipt) {
+        log.debug("Saving receipt for booking: {}",
+                receipt.getBookingId());
+        String sql = """
+                INSERT INTO receipts
+                (id, booking_id, session_id, receipt_type,
+                 email_sent, generated_at)
+                VALUES (?, ?, ?, ?, ?, NOW())
+                """;
+        jdbcTemplate.update(sql,
+                receipt.getId(),
+                receipt.getBookingId(),
+                receipt.getSessionId(),
+                receipt.getReceiptType(),
+                receipt.isEmailSent()
+        );
+    }
+
+    public Optional<Receipt> findById(String id) {
+        String sql = "SELECT * FROM receipts WHERE id = ?";
+        return jdbcTemplate.query(sql, rowMapper, id)
+                .stream().findFirst();
+    }
+
+    public List<Receipt> findByBookingId(String bookingId) {
+        String sql = """
+                SELECT * FROM receipts
+                WHERE booking_id = ?
+                ORDER BY generated_at ASC
+                """;
+        return jdbcTemplate.query(sql, rowMapper, bookingId);
+    }
+
+    public List<Receipt> findByBookingIdAndType(
+            String bookingId, String receiptType) {
+        String sql = """
+                SELECT * FROM receipts
+                WHERE booking_id = ?
+                AND receipt_type = ?
+                """;
+        return jdbcTemplate.query(sql, rowMapper,
+                bookingId, receiptType);
+    }
+}
+
+Step 10 — FeignClient for Booking Service
+Right-click com.parking.receipt.feign → New → Java Class → BookingServiceClient
+javapackage com.parking.receipt.feign;
+
+import com.parking.receipt.dto.response.ApiResponse;
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
+
+import java.util.Map;
+
+@FeignClient(name = "booking-service")
+public interface BookingServiceClient {
+
+    @GetMapping("/api/bookings/{bookingId}")
+    ApiResponse<Map<String, Object>> getBookingById(
+            @RequestHeader("Authorization") String token,
+            @PathVariable("bookingId") String bookingId);
+}
+
+Step 11 — ReceiptService
+Right-click com.parking.receipt.service → New → Java Class → ReceiptService
+What this does: Generates receipts when triggered by Kafka events. For entry receipt — records vehicle entry details. For exit receipt — records full session with duration and fee.
+javapackage com.parking.receipt.service;
+
+import com.parking.receipt.dto.response.ReceiptResponse;
+import com.parking.receipt.exception.ResourceNotFoundException;
+import com.parking.receipt.kafka.BookingEvent;
+import com.parking.receipt.model.Receipt;
+import com.parking.receipt.repository.ReceiptRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ReceiptService {
+
+    private final ReceiptRepository receiptRepository;
+
+    public ReceiptResponse generateEntryReceipt(
+            BookingEvent event) {
+        log.info("Generating entry receipt for booking: {}",
+                event.getBookingId());
+
+        String receiptNumber = "RCP-ENT-"
+                + UUID.randomUUID().toString()
+                        .substring(0, 8).toUpperCase();
+
+        Receipt receipt = Receipt.builder()
+                .id(UUID.randomUUID().toString())
+                .bookingId(event.getBookingId())
+                .receiptType("ENTRY")
+                .receiptNumber(receiptNumber)
+                .vehicleNumber(event.getVehicleNumber())
+                .vehicleType(event.getVehicleType())
+                .entryTime(LocalDateTime.now())
+                .emailSent(false)
+                .build();
+
+        receiptRepository.save(receipt);
+        log.info("Entry receipt generated: {}", receiptNumber);
+
+        return mapToResponse(receipt);
+    }
+
+    public ReceiptResponse generateExitReceipt(
+            BookingEvent event) {
+        log.info("Generating exit receipt for booking: {}",
+                event.getBookingId());
+
+        String receiptNumber = "RCP-EXT-"
+                + UUID.randomUUID().toString()
+                        .substring(0, 8).toUpperCase();
+
+        Receipt receipt = Receipt.builder()
+                .id(UUID.randomUUID().toString())
+                .bookingId(event.getBookingId())
+                .receiptType("EXIT")
+                .receiptNumber(receiptNumber)
+                .vehicleNumber(event.getVehicleNumber())
+                .vehicleType(event.getVehicleType())
+                .feeCharged(event.getAmount())
+                .exitTime(LocalDateTime.now())
+                .emailSent(false)
+                .build();
+
+        receiptRepository.save(receipt);
+        log.info("Exit receipt generated: {}", receiptNumber);
+
+        return mapToResponse(receipt);
+    }
+
+    public List<ReceiptResponse> getReceiptsByBooking(
+            String bookingId) {
+        log.info("Fetching receipts for booking: {}",
+                bookingId);
+        return receiptRepository.findByBookingId(bookingId)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    public ReceiptResponse getReceiptById(String receiptId) {
+        log.info("Fetching receipt: {}", receiptId);
+        return receiptRepository.findById(receiptId)
+                .map(this::mapToResponse)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Receipt not found: "
+                                        + receiptId));
+    }
+
+    private ReceiptResponse mapToResponse(Receipt receipt) {
+        return ReceiptResponse.builder()
+                .id(receipt.getId())
+                .bookingId(receipt.getBookingId())
+                .receiptType(receipt.getReceiptType())
+                .receiptNumber(receipt.getReceiptNumber())
+                .vehicleNumber(receipt.getVehicleNumber())
+                .vehicleType(receipt.getVehicleType())
+                .spotCode(receipt.getSpotCode())
+                .lotName(receipt.getLotName())
+                .entryTime(receipt.getEntryTime())
+                .exitTime(receipt.getExitTime())
+                .durationMinutes(receipt.getDurationMinutes())
+                .feeCharged(receipt.getFeeCharged())
+                .emailSent(receipt.isEmailSent())
+                .generatedAt(receipt.getGeneratedAt())
+                .build();
+    }
+}
+
+Step 12 — Kafka Consumer
+Right-click com.parking.receipt.kafka → New → Java Class → ReceiptKafkaConsumer
+What this does: Listens to Kafka topics. When booking.created event arrives → generates entry receipt. When vehicle.exit event arrives → generates exit receipt.
+javapackage com.parking.receipt.kafka;
+
+import com.parking.receipt.service.ReceiptService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Component;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class ReceiptKafkaConsumer {
+
+    private final ReceiptService receiptService;
+
+    @KafkaListener(
+        topics = "booking.created",
+        groupId = "receipt-service-group")
+    public void handleBookingCreated(BookingEvent event) {
+        log.info("Received booking.created event: {}",
+                event.getBookingId());
+        try {
+            receiptService.generateEntryReceipt(event);
+            log.info("Entry receipt generated for booking: {}",
+                    event.getBookingId());
+        } catch (Exception e) {
+            log.error("Failed to generate entry receipt: {}",
+                    e.getMessage());
+        }
+    }
+
+    @KafkaListener(
+        topics = "vehicle.exit",
+        groupId = "receipt-service-group")
+    public void handleVehicleExit(BookingEvent event) {
+        log.info("Received vehicle.exit event: {}",
+                event.getBookingId());
+        try {
+            receiptService.generateExitReceipt(event);
+            log.info("Exit receipt generated for booking: {}",
+                    event.getBookingId());
+        } catch (Exception e) {
+            log.error("Failed to generate exit receipt: {}",
+                    e.getMessage());
+        }
+    }
+}
+
+Step 13 — ReceiptController
+Right-click com.parking.receipt.controller → New → Java Class → ReceiptController
+javapackage com.parking.receipt.controller;
+
+import com.parking.receipt.dto.response.ApiResponse;
+import com.parking.receipt.dto.response.ReceiptResponse;
+import com.parking.receipt.service.ReceiptService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/receipts")
+@RequiredArgsConstructor
+public class ReceiptController {
+
+    private final ReceiptService receiptService;
+
+    @GetMapping("/{receiptId}")
+    public ResponseEntity<ApiResponse<ReceiptResponse>>
+            getReceipt(
+                @PathVariable("receiptId") String receiptId) {
+        log.info("Get receipt: {}", receiptId);
+        ReceiptResponse response =
+                receiptService.getReceiptById(receiptId);
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Receipt fetched", response));
+    }
+
+    @GetMapping("/booking/{bookingId}")
+    public ResponseEntity<ApiResponse<List<ReceiptResponse>>>
+            getReceiptsByBooking(
+                @PathVariable("bookingId") String bookingId) {
+        log.info("Get receipts for booking: {}", bookingId);
+        List<ReceiptResponse> response =
+                receiptService.getReceiptsByBooking(bookingId);
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Receipts fetched", response));
+    }
+}
+
+Step 14 — Copy Security files
+Copy from Booking Service — change package to com.parking.receipt.*:
+
+JwtUtil.java → com.parking.receipt.security
+JwtAuthFilter.java → com.parking.receipt.filter
+SecurityConfig.java → com.parking.receipt.config
+Exception classes → com.parking.receipt.exception
+GlobalExceptionHandler.java → com.parking.receipt.exception
+
+SecurityConfig for Receipt Service:
+javapackage com.parking.receipt.config;
+
+import com.parking.receipt.filter.JwtAuthFilter;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
+
+    private final JwtAuthFilter jwtAuthFilter;
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http) throws Exception {
+        http
+            .csrf(AbstractHttpConfigurer::disable)
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(
+                        SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(
+                    "/swagger-ui/**",
+                    "/v3/api-docs/**",
+                    "/actuator/**"
+                ).permitAll()
+                .requestMatchers("/api/receipts/**")
+                        .authenticated()
+                .anyRequest().authenticated()
+            )
+            .addFilterBefore(jwtAuthFilter,
+                    UsernamePasswordAuthenticationFilter.class);
+        return http.build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+
+Step 15 — ReceiptServiceApplication.java
+javapackage com.parking.receipt;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.kafka.annotation.EnableKafka;
+
+@SpringBootApplication
+@EnableDiscoveryClient
+@EnableFeignClients
+@EnableKafka
+public class ReceiptServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(
+                ReceiptServiceApplication.class, args);
+    }
+}
+
+Step 16 — Add Receipt Route to API Gateway
+Open api-gateway/application.yml — make sure this route exists:
+yaml- id: receipt-service
+  uri: lb://receipt-service
+  predicates:
+    - Path=/api/receipts/**
+  filters:
+    - StripPrefix=0
+
+Testing in Postman
+Test Receipts:
+GET http://localhost:8080/api/receipts/booking/{BOOKING_ID}
+Authorization: Bearer <USER_TOKEN>
+Returns both entry and exit receipts for the booking.
+GET http://localhost:8080/api/receipts/{RECEIPT_ID}
+Authorization: Bearer <USER_TOKEN>
+
+Commit After Everything Works
+bashgit add .
+git commit -m "feat(caching): add Redis caching for user profiles, spot availability, gate and fee config
+
+- Add RedisConfig with Jackson JSON serialization
+- Add @Cacheable on getProfile, getGatesByLot, getFeeConfigByLot
+- Add @CacheEvict on update operations to invalidate cache
+- Cache TTL: user profiles 30 mins, spots 5 mins, gates/fees 1 hour
+- Covers criteria: #6"
+
+git push
+bashgit add .
+git commit -m "feat(receipt): implement receipt service for entry and exit receipts
+
+- Add Receipt model and repository with JdbcTemplate
+- Add Kafka consumers for booking.created and vehicle.exit events
+- Add entry receipt generation on booking creation
+- Add exit receipt generation with fee details on vehicle exit
+- Add REST endpoints to fetch receipts by ID and booking ID
+- Covers criteria: #4 #6 #10 #11 #12"
+
+git push
+
+Create all files, Maven reload, start Receipt Service — tell me when all services are running and we test the complete flow!
