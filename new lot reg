@@ -1,0 +1,78 @@
+@Operation(
+    summary = "Register admin",
+    description = "Creates admin user. Only ROLE_ADMIN can call this.")
+@PostMapping("/register-admin")
+@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+public ResponseEntity<ApiResponse<UserResponse>> registerAdmin(
+        @Valid @RequestBody RegisterRequest request) {
+    log.info("Admin register request for email: {}",
+            request.getEmail());
+    UserResponse user = userService.registerAdmin(request);
+    return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(ApiResponse.success(
+                    "Admin registered successfully", user));
+}
+
+@Operation(
+    summary = "Register lot manager",
+    description = "Creates lot manager. Only ROLE_ADMIN can call this.")
+@PostMapping("/register-lot-manager")
+@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+public ResponseEntity<ApiResponse<UserResponse>> registerLotManager(
+        @Valid @RequestBody RegisterRequest request) {
+    log.info("Lot manager register request for email: {}",
+            request.getEmail());
+    UserResponse user = userService.registerLotManager(request);
+    return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(ApiResponse.success(
+                    "Lot manager registered successfully", user));
+}
+
+
+
+
+//---------------------------------------------------------
+
+
+
+
+
+
+
+
+public UserResponse registerLotManager(RegisterRequest request) {
+    log.info("Registering lot manager with email: {}",
+            request.getEmail());
+
+    if (userRepository.existsByEmail(request.getEmail())) {
+        throw new ResourceAlreadyExistsException(
+                "Email already registered");
+    }
+
+    if (userRepository.existsByUsername(request.getUsername())) {
+        throw new ResourceAlreadyExistsException(
+                "Username already taken");
+    }
+
+    User user = User.builder()
+            .id(UUID.randomUUID().toString())
+            .username(request.getUsername())
+            .email(request.getEmail())
+            .passwordHash(passwordEncoder.encode(
+                    request.getPassword()))
+            .phone(request.getPhone())
+            .role("ROLE_LOT_MANAGER")
+            .isActive(true)
+            .build();
+
+    userRepository.save(user);
+    log.info("Lot manager registered: {}", user.getId());
+
+    return mapToUserResponse(
+            userRepository.findById(user.getId())
+                    .orElseThrow(() ->
+                            new ResourceNotFoundException(
+                                    "User not found")));
+}
