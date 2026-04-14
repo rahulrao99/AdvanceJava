@@ -1,0 +1,205 @@
+Fix 1 — Generate Receipt Manually (Without Kafka)
+Since Kafka is not running, let's add a manual receipt generation endpoint that gets triggered directly from Booking Service after exit.
+
+Add to ReceiptController.java
+java@PostMapping("/generate")
+public ResponseEntity<ApiResponse<ReceiptResponse>>
+        generateReceipt(
+            @Valid @RequestBody GenerateReceiptRequest request) {
+    log.info("Manual receipt generation for booking: {}",
+            request.getBookingId());
+    ReceiptResponse response =
+            receiptService.generateReceiptManually(request);
+    return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(ApiResponse.success(
+                    "Receipt generated", response));
+}
+Add GenerateReceiptRequest.java
+Right-click com.parking.receipt.dto.request → New → Java Class
+javapackage com.parking.receipt.dto.request;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import lombok.Data;
+
+@Data
+public class GenerateReceiptRequest {
+
+    @NotBlank(message = "Booking ID is required")
+    private String bookingId;
+
+    @NotBlank(message = "Receipt type is required")
+    @Pattern(
+        regexp = "ENTRY|EXIT",
+        message = "Receipt type must be ENTRY or EXIT"
+    )
+    private String receiptType;
+
+    private String vehicleNumber;
+    private String vehicleType;
+    private java.math.BigDecimal feeCharged;
+}
+Add generateReceiptManually() in ReceiptService.java
+javapublic ReceiptResponse generateReceiptManually(
+        GenerateReceiptRequest request) {
+    log.info("Generating {} receipt for booking: {}",
+            request.getReceiptType(),
+            request.getBookingId());
+
+    String prefix = request.getReceiptType()
+            .equals("ENTRY") ? "ENT" : "EXT";
+    String receiptNumber = "RCP-" + prefix + "-"
+            + UUID.randomUUID().toString()
+                    .substring(0, 8).toUpperCase();
+
+    Receipt receipt = Receipt.builder()
+            .id(UUID.randomUUID().toString())
+            .bookingId(request.getBookingId())
+            .receiptType(request.getReceiptType())
+            .receiptNumber(receiptNumber)
+            .vehicleNumber(request.getVehicleNumber())
+            .vehicleType(request.getVehicleType())
+            .feeCharged(request.getFeeCharged())
+            .entryTime(request.getReceiptType()
+                    .equals("ENTRY")
+                    ? LocalDateTime.now() : null)
+            .exitTime(request.getReceiptType()
+                    .equals("EXIT")
+                    ? LocalDateTime.now() : null)
+            .emailSent(false)
+            .build();
+
+    receiptRepository.save(receipt);
+    log.info("Receipt generated: {}", receiptNumber);
+
+    return mapToResponse(receipt);
+}
+
+Fix 2 — Add Receipt Route to API Gateway
+Open api-gateway/application.yml — make sure receipt route exists:
+yaml- id: receipt-service
+  uri: lb://receipt-service
+  predicates:
+    - Path=/api/receipts/**
+  filters:
+    - StripPrefix=0
+
+Fix 3 — Add PDF Download Endpoint
+For auto-download of receipt as PDF, add this to ReceiptController.java:
+java@GetMapping("/{receiptId}/download")
+public ResponseEntity<byte[]> downloadReceipt(
+        @PathVariable("receiptId") String receiptId) {
+    log.info("Downloading receipt: {}", receiptId);
+
+    ReceiptResponse receipt =
+            receiptService.getReceiptById(receiptId);
+
+    // Generate PDF content as text
+    String content = generateReceiptContent(receipt);
+    byte[] pdfBytes = content.getBytes();
+
+    return ResponseEntity.ok()
+            .header("Content-Type", "application/pdf")
+            .header("Content-Disposition",
+                    "attachment; filename=\""
+                    + receipt.getReceiptNumber()
+                    + ".pdf\"")
+            .body(pdfBytes);
+}
+
+private String generateReceiptContent(
+        ReceiptResponse receipt) {
+    return """
+            ============================================
+            VEHICLE PARKING MANAGEMENT SYSTEM
+            ============================================
+            Receipt Number : %s
+            Receipt Type   : %s
+            ============================================
+            Vehicle Number : %s
+            Vehicle Type   : %s
+            Lot Name       : %s
+            Spot Code      : %s
+            Level          : %s
+            ============================================
+            Entry Time     : %s
+            Exit Time      : %s
+            Duration       : %s minutes
+            Fee Charged    : Rs. %s
+            ============================================
+            Generated At   : %s
+            ============================================
+            Thank you for using Central Parking!
+            ============================================
+            """.formatted(
+                receipt.getReceiptNumber(),
+                receipt.getReceiptType(),
+                receipt.getVehicleNumber() != null
+                        ? receipt.getVehicleNumber() : "N/A",
+                receipt.getVehicleType() != null
+                        ? receipt.getVehicleType() : "N/A",
+                receipt.getLotName() != null
+                        ? receipt.getLotName() : "N/A",
+                receipt.getSpotCode() != null
+                        ? receipt.getSpotCode() : "N/A",
+                receipt.getLevelLabel() != null
+                        ? receipt.getLevelLabel() : "N/A",
+                receipt.getEntryTime() != null
+                        ? receipt.getEntryTime() : "N/A",
+                receipt.getExitTime() != null
+                        ? receipt.getExitTime() : "N/A",
+                receipt.getDurationMinutes() != null
+                        ? receipt.getDurationMinutes() : 0,
+                receipt.getFeeCharged() != null
+                        ? receipt.getFeeCharged() : 0,
+                receipt.getGeneratedAt()
+            );
+}
+
+Complete Testing Flow
+Step 1 — Generate Entry Receipt manually
+POST http://localhost:8080/api/receipts/generate
+Authorization: Bearer USER_TOKEN
+Content-Type: application/json
+
+{
+    "bookingId": "{{BOOKING_ID}}",
+    "receiptType": "ENTRY",
+    "vehicleNumber": "MH12AB1234",
+    "vehicleType": "FOUR_WHEELER"
+}
+Save ENTRY_RECEIPT_ID from response.
+
+Step 2 — Generate Exit Receipt manually
+POST http://localhost:8080/api/receipts/generate
+Authorization: Bearer USER_TOKEN
+Content-Type: application/json
+
+{
+    "bookingId": "{{BOOKING_ID}}",
+    "receiptType": "EXIT",
+    "vehicleNumber": "MH12AB1234",
+    "vehicleType": "FOUR_WHEELER",
+    "feeCharged": 100.00
+}
+Save EXIT_RECEIPT_ID from response.
+
+Step 3 — Get All Receipts for Booking
+GET http://localhost:8080/api/receipts/booking/{{BOOKING_ID}}
+Authorization: Bearer USER_TOKEN
+Now shows both ENTRY and EXIT receipts ✅
+
+Step 4 — Download Receipt as file
+GET http://localhost:8080/api/receipts/{{EXIT_RECEIPT_ID}}/download
+Authorization: Bearer USER_TOKEN
+In Postman — click Save Response → Save to a file → saves as .pdf file!
+
+Add to Postman Collection
+Add these 3 new requests in Receipt Service folder:
+RequestMethodURLGenerate Entry ReceiptPOST/api/receipts/generateGenerate Exit ReceiptPOST/api/receipts/generateDownload ReceiptGET/api/receipts/{{RECEIPT_ID}}/download
+
+For Kafka — Install Later
+Once you install Kafka, receipts will auto-generate on booking creation and vehicle exit. For now manual generation covers the requirement.
+
+Make these changes to ReceiptController and ReceiptService, restart Receipt Service and test! 🚀
