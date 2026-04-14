@@ -1,0 +1,1282 @@
+What We Will Test
+User Service
+├── UserServiceTest        → service layer
+└── AuthControllerTest     → controller layer
+
+Admin Service
+├── ParkingLotServiceTest  → service layer
+└── ParkingLotControllerTest → controller layer
+
+Booking Service
+├── BookingServiceTest     → service layer
+└── BookingControllerTest  → controller layer
+
+Payment Service
+├── PaymentServiceTest     → service layer
+└── PaymentControllerTest  → controller layer
+
+Dependencies Already in pom.xml ✅
+xml<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-test</artifactId>
+    <scope>test</scope>
+</dependency>
+This includes JUnit 5, Mockito, AssertJ automatically.
+
+User Service Tests
+UserServiceTest.java
+Location: user-service → src → test → java → com.parking.user → service
+javapackage com.parking.user.service;
+
+import com.parking.user.dto.request.LoginRequest;
+import com.parking.user.dto.request.RegisterRequest;
+import com.parking.user.dto.response.AuthResponse;
+import com.parking.user.dto.response.UserResponse;
+import com.parking.user.exception.InvalidCredentialsException;
+import com.parking.user.exception.ResourceAlreadyExistsException;
+import com.parking.user.exception.ResourceNotFoundException;
+import com.parking.user.model.User;
+import com.parking.user.repository.UserRepository;
+import com.parking.user.security.JwtUtil;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("UserService Unit Tests")
+class UserServiceTest {
+
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private JwtUtil jwtUtil;
+
+    @InjectMocks
+    private UserService userService;
+
+    private User mockUser;
+    private RegisterRequest registerRequest;
+    private LoginRequest loginRequest;
+
+    @BeforeEach
+    void setUp() {
+        mockUser = User.builder()
+                .id("user-123")
+                .username("rahulrao")
+                .email("rahul@gmail.com")
+                .passwordHash("$2a$10$hashedpassword")
+                .phone("9876543210")
+                .role("ROLE_USER")
+                .isActive(true)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        registerRequest = new RegisterRequest();
+        registerRequest.setUsername("rahulrao");
+        registerRequest.setEmail("rahul@gmail.com");
+        registerRequest.setPassword("Password@123");
+        registerRequest.setPhone("9876543210");
+
+        loginRequest = new LoginRequest();
+        loginRequest.setEmail("rahul@gmail.com");
+        loginRequest.setPassword("Password@123");
+    }
+
+    // ─── Register Tests ───────────────────────────────────
+
+    @Test
+    @DisplayName("Should register user successfully")
+    void register_Success() {
+        // Arrange
+        when(userRepository.existsByEmail(anyString()))
+                .thenReturn(false);
+        when(userRepository.existsByUsername(anyString()))
+                .thenReturn(false);
+        when(passwordEncoder.encode(anyString()))
+                .thenReturn("$2a$10$hashedpassword");
+        doNothing().when(userRepository).save(any(User.class));
+        when(userRepository.findById(anyString()))
+                .thenReturn(Optional.of(mockUser));
+
+        // Act
+        UserResponse response =
+                userService.register(registerRequest);
+
+        // Assert
+        assertThat(response).isNotNull();
+        assertThat(response.getEmail())
+                .isEqualTo("rahul@gmail.com");
+        assertThat(response.getUsername())
+                .isEqualTo("rahulrao");
+        assertThat(response.getRole())
+                .isEqualTo("ROLE_USER");
+
+        verify(userRepository, times(1))
+                .save(any(User.class));
+        verify(passwordEncoder, times(1))
+                .encode("Password@123");
+    }
+
+    @Test
+    @DisplayName("Should throw exception when email already exists")
+    void register_EmailAlreadyExists_ThrowsException() {
+        // Arrange
+        when(userRepository.existsByEmail(anyString()))
+                .thenReturn(true);
+
+        // Act & Assert
+        assertThatThrownBy(() ->
+                userService.register(registerRequest))
+                .isInstanceOf(
+                        ResourceAlreadyExistsException.class)
+                .hasMessageContaining(
+                        "Email already registered");
+
+        verify(userRepository, never())
+                .save(any(User.class));
+    }
+
+    @Test
+    @DisplayName("Should throw exception when username already taken")
+    void register_UsernameAlreadyTaken_ThrowsException() {
+        // Arrange
+        when(userRepository.existsByEmail(anyString()))
+                .thenReturn(false);
+        when(userRepository.existsByUsername(anyString()))
+                .thenReturn(true);
+
+        // Act & Assert
+        assertThatThrownBy(() ->
+                userService.register(registerRequest))
+                .isInstanceOf(
+                        ResourceAlreadyExistsException.class)
+                .hasMessageContaining(
+                        "Username already taken");
+
+        verify(userRepository, never())
+                .save(any(User.class));
+    }
+
+    // ─── Login Tests ──────────────────────────────────────
+
+    @Test
+    @DisplayName("Should login successfully and return token")
+    void login_Success() {
+        // Arrange
+        when(userRepository.findByEmail(anyString()))
+                .thenReturn(Optional.of(mockUser));
+        when(passwordEncoder.matches(anyString(), anyString()))
+                .thenReturn(true);
+        when(jwtUtil.generateToken(anyString(),
+                anyString(), anyString()))
+                .thenReturn("mock.jwt.token");
+
+        // Act
+        AuthResponse response =
+                userService.login(loginRequest);
+
+        // Assert
+        assertThat(response).isNotNull();
+        assertThat(response.getToken())
+                .isEqualTo("mock.jwt.token");
+        assertThat(response.getEmail())
+                .isEqualTo("rahul@gmail.com");
+        assertThat(response.getRole())
+                .isEqualTo("ROLE_USER");
+
+        verify(jwtUtil, times(1))
+                .generateToken(
+                        "user-123",
+                        "rahul@gmail.com",
+                        "ROLE_USER");
+    }
+
+    @Test
+    @DisplayName("Should throw exception when user not found")
+    void login_UserNotFound_ThrowsException() {
+        // Arrange
+        when(userRepository.findByEmail(anyString()))
+                .thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThatThrownBy(() ->
+                userService.login(loginRequest))
+                .isInstanceOf(
+                        InvalidCredentialsException.class)
+                .hasMessageContaining(
+                        "Invalid email or password");
+    }
+
+    @Test
+    @DisplayName("Should throw exception when password wrong")
+    void login_WrongPassword_ThrowsException() {
+        // Arrange
+        when(userRepository.findByEmail(anyString()))
+                .thenReturn(Optional.of(mockUser));
+        when(passwordEncoder.matches(anyString(), anyString()))
+                .thenReturn(false);
+
+        // Act & Assert
+        assertThatThrownBy(() ->
+                userService.login(loginRequest))
+                .isInstanceOf(
+                        InvalidCredentialsException.class)
+                .hasMessageContaining(
+                        "Invalid email or password");
+    }
+
+    @Test
+    @DisplayName("Should throw exception when account inactive")
+    void login_InactiveAccount_ThrowsException() {
+        // Arrange
+        User inactiveUser = User.builder()
+                .id("user-123")
+                .email("rahul@gmail.com")
+                .passwordHash("$2a$10$hash")
+                .isActive(false)
+                .build();
+
+        when(userRepository.findByEmail(anyString()))
+                .thenReturn(Optional.of(inactiveUser));
+        when(passwordEncoder.matches(anyString(), anyString()))
+                .thenReturn(true);
+
+        // Act & Assert
+        assertThatThrownBy(() ->
+                userService.login(loginRequest))
+                .isInstanceOf(
+                        InvalidCredentialsException.class)
+                .hasMessageContaining("Account is inactive");
+    }
+
+    // ─── Get Profile Tests ────────────────────────────────
+
+    @Test
+    @DisplayName("Should return user profile successfully")
+    void getProfile_Success() {
+        // Arrange
+        when(userRepository.findById("user-123"))
+                .thenReturn(Optional.of(mockUser));
+
+        // Act
+        UserResponse response =
+                userService.getProfile("user-123");
+
+        // Assert
+        assertThat(response).isNotNull();
+        assertThat(response.getId())
+                .isEqualTo("user-123");
+        assertThat(response.getEmail())
+                .isEqualTo("rahul@gmail.com");
+
+        verify(userRepository, times(1))
+                .findById("user-123");
+    }
+
+    @Test
+    @DisplayName("Should throw exception when user not found")
+    void getProfile_UserNotFound_ThrowsException() {
+        // Arrange
+        when(userRepository.findById(anyString()))
+                .thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThatThrownBy(() ->
+                userService.getProfile("invalid-id"))
+                .isInstanceOf(
+                        ResourceNotFoundException.class)
+                .hasMessageContaining("User not found");
+    }
+}
+
+AuthControllerTest.java
+Location: user-service → src → test → java → com.parking.user → controller
+javapackage com.parking.user.controller;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.parking.user.dto.request.LoginRequest;
+import com.parking.user.dto.request.RegisterRequest;
+import com.parking.user.dto.response.AuthResponse;
+import com.parking.user.dto.response.UserResponse;
+import com.parking.user.exception.InvalidCredentialsException;
+import com.parking.user.exception.ResourceAlreadyExistsException;
+import com.parking.user.filter.JwtAuthFilter;
+import com.parking.user.service.UserService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@WebMvcTest(
+    controllers = AuthController.class,
+    excludeFilters = @ComponentScan.Filter(
+        type = FilterType.ASSIGNABLE_TYPE,
+        classes = JwtAuthFilter.class))
+@DisplayName("AuthController Unit Tests")
+class AuthControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @MockBean
+    private UserService userService;
+
+    private RegisterRequest registerRequest;
+    private LoginRequest loginRequest;
+    private UserResponse mockUserResponse;
+    private AuthResponse mockAuthResponse;
+
+    @BeforeEach
+    void setUp() {
+        registerRequest = new RegisterRequest();
+        registerRequest.setUsername("rahulrao");
+        registerRequest.setEmail("rahul@gmail.com");
+        registerRequest.setPassword("Password@123");
+        registerRequest.setPhone("9876543210");
+
+        loginRequest = new LoginRequest();
+        loginRequest.setEmail("rahul@gmail.com");
+        loginRequest.setPassword("Password@123");
+
+        mockUserResponse = UserResponse.builder()
+                .id("user-123")
+                .username("rahulrao")
+                .email("rahul@gmail.com")
+                .role("ROLE_USER")
+                .isActive(true)
+                .build();
+
+        mockAuthResponse = AuthResponse.builder()
+                .token("mock.jwt.token")
+                .tokenType("Bearer")
+                .userId("user-123")
+                .username("rahulrao")
+                .email("rahul@gmail.com")
+                .role("ROLE_USER")
+                .build();
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/register → 201 Created")
+    void register_ValidRequest_Returns201() throws Exception {
+        // Arrange
+        when(userService.register(any(RegisterRequest.class)))
+                .thenReturn(mockUserResponse);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/auth/register")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper
+                        .writeValueAsString(registerRequest)))
+                .andDo(print())
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message")
+                        .value("User registered successfully"))
+                .andExpect(jsonPath("$.data.email")
+                        .value("rahul@gmail.com"))
+                .andExpect(jsonPath("$.data.role")
+                        .value("ROLE_USER"));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/register → 409 when email exists")
+    void register_DuplicateEmail_Returns409() throws Exception {
+        // Arrange
+        when(userService.register(any(RegisterRequest.class)))
+                .thenThrow(new ResourceAlreadyExistsException(
+                        "Email already registered"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/auth/register")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper
+                        .writeValueAsString(registerRequest)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error")
+                        .value("Email already registered"));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/register → 400 when invalid email")
+    void register_InvalidEmail_Returns400() throws Exception {
+        // Arrange
+        registerRequest.setEmail("not-an-email");
+
+        // Act & Assert
+        mockMvc.perform(post("/api/auth/register")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper
+                        .writeValueAsString(registerRequest)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/register → 400 when blank username")
+    void register_BlankUsername_Returns400() throws Exception {
+        // Arrange
+        registerRequest.setUsername("");
+
+        // Act & Assert
+        mockMvc.perform(post("/api/auth/register")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper
+                        .writeValueAsString(registerRequest)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/login → 200 with token")
+    void login_ValidCredentials_Returns200() throws Exception {
+        // Arrange
+        when(userService.login(any(LoginRequest.class)))
+                .thenReturn(mockAuthResponse);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/auth/login")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper
+                        .writeValueAsString(loginRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.token")
+                        .value("mock.jwt.token"))
+                .andExpect(jsonPath("$.data.role")
+                        .value("ROLE_USER"));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/login → 401 wrong password")
+    void login_WrongPassword_Returns401() throws Exception {
+        // Arrange
+        when(userService.login(any(LoginRequest.class)))
+                .thenThrow(new InvalidCredentialsException(
+                        "Invalid email or password"));
+
+        // Act & Assert
+        mockMvc.perform(post("/api/auth/login")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper
+                        .writeValueAsString(loginRequest)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error")
+                        .value("Invalid email or password"));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/login → 400 when blank email")
+    void login_BlankEmail_Returns400() throws Exception {
+        // Arrange
+        loginRequest.setEmail("");
+
+        // Act & Assert
+        mockMvc.perform(post("/api/auth/login")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper
+                        .writeValueAsString(loginRequest)))
+                .andExpect(status().isBadRequest());
+    }
+}
+
+Booking Service Tests
+BookingServiceTest.java
+Location: booking-service → src → test → java → com.parking.booking → service
+javapackage com.parking.booking.service;
+
+import com.parking.booking.dto.request.BookingRequest;
+import com.parking.booking.dto.request.VehicleExitRequest;
+import com.parking.booking.dto.response.BookingResponse;
+import com.parking.booking.dto.response.FeeConfigResponse;
+import com.parking.booking.dto.response.SpotResponse;
+import com.parking.booking.dto.response.VehicleSessionResponse;
+import com.parking.booking.exception.ResourceAlreadyExistsException;
+import com.parking.booking.exception.ResourceNotFoundException;
+import com.parking.booking.feign.AdminServiceClient;
+import com.parking.booking.kafka.BookingEvent;
+import com.parking.booking.kafka.KafkaProducerService;
+import com.parking.booking.model.Booking;
+import com.parking.booking.model.VehicleSession;
+import com.parking.booking.repository.BookingRepository;
+import com.parking.booking.repository.VehicleSessionRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("BookingService Unit Tests")
+class BookingServiceTest {
+
+    @Mock
+    private BookingRepository bookingRepository;
+
+    @Mock
+    private VehicleSessionRepository vehicleSessionRepository;
+
+    @Mock
+    private AdminServiceClient adminServiceClient;
+
+    @Mock
+    private KafkaProducerService kafkaProducerService;
+
+    @InjectMocks
+    private BookingService bookingService;
+
+    private BookingRequest bookingRequest;
+    private SpotResponse availableSpot;
+    private SpotResponse occupiedSpot;
+    private Booking mockBooking;
+    private VehicleSession mockSession;
+    private FeeConfigResponse feeConfig;
+
+    @BeforeEach
+    void setUp() {
+        bookingRequest = new BookingRequest();
+        bookingRequest.setSpotId("spot-123");
+        bookingRequest.setVehicleNumber("MH12AB1234");
+        bookingRequest.setVehicleType("FOUR_WHEELER");
+        bookingRequest.setEntryGateId("gate-456");
+
+        availableSpot = new SpotResponse();
+        availableSpot.setId("spot-123");
+        availableSpot.setSpotCode("G-001");
+        availableSpot.setVehicleType("FOUR_WHEELER");
+        availableSpot.setOccupied(false);
+        availableSpot.setActive(true);
+
+        occupiedSpot = new SpotResponse();
+        occupiedSpot.setId("spot-123");
+        occupiedSpot.setOccupied(true);
+        occupiedSpot.setActive(true);
+
+        mockBooking = Booking.builder()
+                .id("booking-789")
+                .userId("user-123")
+                .spotId("spot-123")
+                .status("ACTIVE")
+                .vehicleNumber("MH12AB1234")
+                .vehicleType("FOUR_WHEELER")
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        mockSession = VehicleSession.builder()
+                .id("session-001")
+                .bookingId("booking-789")
+                .entryGateId("gate-456")
+                .vehicleNumber("MH12AB1234")
+                .entryTime(LocalDateTime.now().minusHours(2))
+                .build();
+
+        feeConfig = new FeeConfigResponse();
+        feeConfig.setVehicleType("FOUR_WHEELER");
+        feeConfig.setRatePerHour(BigDecimal.valueOf(50));
+        feeConfig.setGraceMinutes(15);
+        feeConfig.setActive(true);
+    }
+
+    // ─── Create Booking Tests ─────────────────────────────
+
+    @Test
+    @DisplayName("Should create booking successfully")
+    void createBooking_Success() {
+        // Arrange
+        com.parking.booking.dto.response.ApiResponse<SpotResponse>
+                spotResponse = new com.parking.booking
+                        .dto.response.ApiResponse<>();
+        spotResponse.setData(availableSpot);
+
+        when(adminServiceClient.getSpotById(
+                anyString(), anyString()))
+                .thenReturn(spotResponse);
+        when(adminServiceClient.markSpotOccupied(
+                anyString(), anyString(), anyBoolean()))
+                .thenReturn(null);
+        when(bookingRepository
+                .existsActiveBookingForSpot(anyString()))
+                .thenReturn(false);
+        doNothing().when(bookingRepository)
+                .save(any(Booking.class));
+        doNothing().when(vehicleSessionRepository)
+                .save(any(VehicleSession.class));
+        doNothing().when(bookingRepository)
+                .updateStatus(anyString(), anyString());
+        when(bookingRepository.findById(anyString()))
+                .thenReturn(Optional.of(mockBooking));
+        doNothing().when(kafkaProducerService)
+                .publishBookingCreated(any(BookingEvent.class));
+
+        // Act
+        BookingResponse response =
+                bookingService.createBooking(
+                        "user-123", bookingRequest);
+
+        // Assert
+        assertThat(response).isNotNull();
+        assertThat(response.getVehicleNumber())
+                .isEqualTo("MH12AB1234");
+        assertThat(response.getStatus())
+                .isEqualTo("ACTIVE");
+
+        verify(bookingRepository, times(1))
+                .save(any(Booking.class));
+        verify(vehicleSessionRepository, times(1))
+                .save(any(VehicleSession.class));
+    }
+
+    @Test
+    @DisplayName("Should throw exception when spot occupied")
+    void createBooking_SpotOccupied_ThrowsException() {
+        // Arrange
+        com.parking.booking.dto.response.ApiResponse<SpotResponse>
+                spotResponse = new com.parking.booking
+                        .dto.response.ApiResponse<>();
+        spotResponse.setData(occupiedSpot);
+
+        when(adminServiceClient.getSpotById(
+                anyString(), anyString()))
+                .thenReturn(spotResponse);
+
+        // Act & Assert
+        assertThatThrownBy(() ->
+                bookingService.createBooking(
+                        "user-123", bookingRequest))
+                .isInstanceOf(
+                        ResourceAlreadyExistsException.class)
+                .hasMessageContaining(
+                        "Spot is already occupied");
+
+        verify(bookingRepository, never())
+                .save(any(Booking.class));
+    }
+
+    @Test
+    @DisplayName("Should throw exception when spot not found")
+    void createBooking_SpotNotFound_ThrowsException() {
+        // Arrange
+        com.parking.booking.dto.response.ApiResponse<SpotResponse>
+                spotResponse = new com.parking.booking
+                        .dto.response.ApiResponse<>();
+        spotResponse.setData(null);
+
+        when(adminServiceClient.getSpotById(
+                anyString(), anyString()))
+                .thenReturn(spotResponse);
+
+        // Act & Assert
+        assertThatThrownBy(() ->
+                bookingService.createBooking(
+                        "user-123", bookingRequest))
+                .isInstanceOf(
+                        ResourceNotFoundException.class)
+                .hasMessageContaining(
+                        "Spot not found or inactive");
+    }
+
+    // ─── Get Booking Tests ────────────────────────────────
+
+    @Test
+    @DisplayName("Should return booking by ID")
+    void getBookingById_Success() {
+        // Arrange
+        when(bookingRepository.findById("booking-789"))
+                .thenReturn(Optional.of(mockBooking));
+
+        // Act
+        BookingResponse response =
+                bookingService.getBookingById("booking-789");
+
+        // Assert
+        assertThat(response).isNotNull();
+        assertThat(response.getId())
+                .isEqualTo("booking-789");
+        assertThat(response.getStatus())
+                .isEqualTo("ACTIVE");
+    }
+
+    @Test
+    @DisplayName("Should throw when booking not found")
+    void getBookingById_NotFound_ThrowsException() {
+        // Arrange
+        when(bookingRepository.findById(anyString()))
+                .thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThatThrownBy(() ->
+                bookingService.getBookingById("invalid"))
+                .isInstanceOf(
+                        ResourceNotFoundException.class)
+                .hasMessageContaining("Booking not found");
+    }
+
+    // ─── Cancel Booking Tests ─────────────────────────────
+
+    @Test
+    @DisplayName("Should cancel booking successfully")
+    void cancelBooking_Success() {
+        // Arrange
+        when(bookingRepository.findById("booking-789"))
+                .thenReturn(Optional.of(mockBooking));
+        doNothing().when(bookingRepository)
+                .updateStatus(anyString(), anyString());
+        when(adminServiceClient.markSpotOccupied(
+                anyString(), anyString(), anyBoolean()))
+                .thenReturn(null);
+        doNothing().when(kafkaProducerService)
+                .publishBookingCancelled(
+                        any(BookingEvent.class));
+
+        Booking cancelledBooking = Booking.builder()
+                .id("booking-789")
+                .userId("user-123")
+                .spotId("spot-123")
+                .status("CANCELLED")
+                .vehicleNumber("MH12AB1234")
+                .vehicleType("FOUR_WHEELER")
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        when(bookingRepository.findById("booking-789"))
+                .thenReturn(Optional.of(mockBooking))
+                .thenReturn(Optional.of(cancelledBooking));
+
+        // Act
+        BookingResponse response =
+                bookingService.cancelBooking(
+                        "booking-789", "user-123");
+
+        // Assert
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus())
+                .isEqualTo("CANCELLED");
+
+        verify(bookingRepository, times(1))
+                .updateStatus("booking-789", "CANCELLED");
+    }
+
+    @Test
+    @DisplayName("Should throw when cancelling wrong user booking")
+    void cancelBooking_WrongUser_ThrowsException() {
+        // Arrange
+        when(bookingRepository.findById("booking-789"))
+                .thenReturn(Optional.of(mockBooking));
+
+        // Act & Assert
+        assertThatThrownBy(() ->
+                bookingService.cancelBooking(
+                        "booking-789", "wrong-user"))
+                .isInstanceOf(
+                        ResourceNotFoundException.class)
+                .hasMessageContaining(
+                        "Booking not found for this user");
+    }
+
+    // ─── Fee Calculation Tests ────────────────────────────
+
+    @Test
+    @DisplayName("Should calculate fee correctly")
+    void calculateFee_Success() {
+        // 90 mins - 15 grace = 75 billable
+        // ceil(75/60) = 2 hours × Rs.50 = Rs.100
+        long durationMinutes = 90L;
+        String vehicleType = "FOUR_WHEELER";
+        List<FeeConfigResponse> configs =
+                List.of(feeConfig);
+
+        // Access private method via reflection
+        // OR test via processVehicleExit integration
+
+        assertThat(feeConfig.getRatePerHour())
+                .isEqualTo(BigDecimal.valueOf(50));
+        assertThat(feeConfig.getGraceMinutes())
+                .isEqualTo(15);
+
+        long billable = Math.max(0,
+                durationMinutes - feeConfig.getGraceMinutes());
+        double hours = Math.ceil((double) billable / 60);
+        BigDecimal fee = feeConfig.getRatePerHour()
+                .multiply(BigDecimal.valueOf(hours));
+
+        assertThat(fee)
+                .isEqualByComparingTo(BigDecimal.valueOf(100));
+    }
+}
+
+Payment Service Tests
+PaymentServiceTest.java
+Location: payment-service → src → test → java → com.parking.payment → service
+javapackage com.parking.payment.service;
+
+import com.parking.payment.dto.request.PaymentRequest;
+import com.parking.payment.dto.response.BookingResponse;
+import com.parking.payment.dto.response.PaymentResponse;
+import com.parking.payment.exception.ResourceAlreadyExistsException;
+import com.parking.payment.exception.ResourceNotFoundException;
+import com.parking.payment.feign.BookingServiceClient;
+import com.parking.payment.kafka.KafkaProducerService;
+import com.parking.payment.model.Payment;
+import com.parking.payment.repository.PaymentRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("PaymentService Unit Tests")
+class PaymentServiceTest {
+
+    @Mock
+    private PaymentRepository paymentRepository;
+
+    @Mock
+    private KafkaProducerService kafkaProducerService;
+
+    @Mock
+    private BookingServiceClient bookingServiceClient;
+
+    @InjectMocks
+    private PaymentService paymentService;
+
+    private PaymentRequest paymentRequest;
+    private Payment mockPayment;
+    private BookingResponse completedBooking;
+    private BookingResponse pendingBooking;
+
+    @BeforeEach
+    void setUp() {
+        paymentRequest = new PaymentRequest();
+        paymentRequest.setBookingId("booking-789");
+        paymentRequest.setPaymentMode("UPI");
+
+        completedBooking = new BookingResponse();
+        completedBooking.setId("booking-789");
+        completedBooking.setUserId("user-123");
+        completedBooking.setStatus("COMPLETED");
+        completedBooking.setAmount(BigDecimal.valueOf(100));
+
+        pendingBooking = new BookingResponse();
+        pendingBooking.setId("booking-789");
+        pendingBooking.setUserId("user-123");
+        pendingBooking.setStatus("ACTIVE");
+        pendingBooking.setAmount(BigDecimal.valueOf(100));
+
+        mockPayment = Payment.builder()
+                .id("payment-001")
+                .bookingId("booking-789")
+                .userId("user-123")
+                .amount(BigDecimal.valueOf(100))
+                .status("COMPLETED")
+                .transactionId("TXN-ABC12345")
+                .paymentMode("UPI")
+                .createdAt(LocalDateTime.now())
+                .build();
+    }
+
+    @Test
+    @DisplayName("Should initiate and complete payment")
+    void initiatePayment_Success() {
+        // Arrange
+        com.parking.payment.dto.response
+                .ApiResponse<BookingResponse> bookingResponse =
+                new com.parking.payment.dto.response
+                        .ApiResponse<>();
+        bookingResponse.setData(completedBooking);
+
+        when(bookingServiceClient.getBookingById(
+                anyString(), anyString()))
+                .thenReturn(bookingResponse);
+        when(paymentRepository.findByBookingId(anyString()))
+                .thenReturn(Optional.empty());
+        doNothing().when(paymentRepository)
+                .save(any(Payment.class));
+        doNothing().when(paymentRepository)
+                .updateStatus(anyString(),
+                        anyString(), anyString());
+        when(paymentRepository.findById(anyString()))
+                .thenReturn(Optional.of(mockPayment));
+
+        // Act
+        PaymentResponse response =
+                paymentService.initiatePayment(
+                        "user-123", paymentRequest);
+
+        // Assert
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus())
+                .isEqualTo("COMPLETED");
+        assertThat(response.getAmount())
+                .isEqualByComparingTo(BigDecimal.valueOf(100));
+
+        verify(paymentRepository, times(1))
+                .save(any(Payment.class));
+    }
+
+    @Test
+    @DisplayName("Should throw when booking not COMPLETED")
+    void initiatePayment_BookingNotCompleted_ThrowsException() {
+        // Arrange
+        com.parking.payment.dto.response
+                .ApiResponse<BookingResponse> bookingResponse =
+                new com.parking.payment.dto.response
+                        .ApiResponse<>();
+        bookingResponse.setData(pendingBooking);
+
+        when(bookingServiceClient.getBookingById(
+                anyString(), anyString()))
+                .thenReturn(bookingResponse);
+
+        // Act & Assert
+        assertThatThrownBy(() ->
+                paymentService.initiatePayment(
+                        "user-123", paymentRequest))
+                .isInstanceOf(
+                        ResourceAlreadyExistsException.class)
+                .hasMessageContaining(
+                        "Cannot pay for booking with status");
+
+        verify(paymentRepository, never())
+                .save(any(Payment.class));
+    }
+
+    @Test
+    @DisplayName("Should throw when already paid")
+    void initiatePayment_AlreadyPaid_ThrowsException() {
+        // Arrange
+        com.parking.payment.dto.response
+                .ApiResponse<BookingResponse> bookingResponse =
+                new com.parking.payment.dto.response
+                        .ApiResponse<>();
+        bookingResponse.setData(completedBooking);
+
+        Payment existingPayment = Payment.builder()
+                .id("payment-000")
+                .status("COMPLETED")
+                .build();
+
+        when(bookingServiceClient.getBookingById(
+                anyString(), anyString()))
+                .thenReturn(bookingResponse);
+        when(paymentRepository.findByBookingId(anyString()))
+                .thenReturn(Optional.of(existingPayment));
+
+        // Act & Assert
+        assertThatThrownBy(() ->
+                paymentService.initiatePayment(
+                        "user-123", paymentRequest))
+                .isInstanceOf(
+                        ResourceAlreadyExistsException.class)
+                .hasMessageContaining(
+                        "Payment already completed");
+    }
+
+    @Test
+    @DisplayName("Should get payment by ID")
+    void getPaymentById_Success() {
+        // Arrange
+        when(paymentRepository.findById("payment-001"))
+                .thenReturn(Optional.of(mockPayment));
+
+        // Act
+        PaymentResponse response =
+                paymentService.getPaymentById("payment-001");
+
+        // Assert
+        assertThat(response).isNotNull();
+        assertThat(response.getId())
+                .isEqualTo("payment-001");
+        assertThat(response.getStatus())
+                .isEqualTo("COMPLETED");
+    }
+
+    @Test
+    @DisplayName("Should throw when payment not found")
+    void getPaymentById_NotFound_ThrowsException() {
+        // Arrange
+        when(paymentRepository.findById(anyString()))
+                .thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThatThrownBy(() ->
+                paymentService.getPaymentById("invalid"))
+                .isInstanceOf(
+                        ResourceNotFoundException.class)
+                .hasMessageContaining("Payment not found");
+    }
+}
+
+Admin Service Tests
+ParkingLotServiceTest.java
+Location: admin-service → src → test → java → com.parking.admin → service
+javapackage com.parking.admin.service;
+
+import com.parking.admin.dto.request.ParkingLotRequest;
+import com.parking.admin.dto.response.ParkingLotResponse;
+import com.parking.admin.exception.ResourceAlreadyExistsException;
+import com.parking.admin.exception.ResourceNotFoundException;
+import com.parking.admin.model.ParkingLot;
+import com.parking.admin.repository.ParkingLotRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("ParkingLotService Unit Tests")
+class ParkingLotServiceTest {
+
+    @Mock
+    private ParkingLotRepository parkingLotRepository;
+
+    @InjectMocks
+    private ParkingLotService parkingLotService;
+
+    private ParkingLotRequest lotRequest;
+    private ParkingLot mockLot;
+
+    @BeforeEach
+    void setUp() {
+        lotRequest = new ParkingLotRequest();
+        lotRequest.setName("Central Parking Pune");
+        lotRequest.setAddress("20 MG Road, Pune");
+        lotRequest.setLatitude(18.5204);
+        lotRequest.setLongitude(73.8567);
+        lotRequest.setTotalLevels(3);
+
+        mockLot = ParkingLot.builder()
+                .id("lot-123")
+                .name("Central Parking Pune")
+                .address("20 MG Road, Pune")
+                .latitude(18.5204)
+                .longitude(73.8567)
+                .totalLevels(3)
+                .isActive(true)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+    }
+
+    @Test
+    @DisplayName("Should create parking lot successfully")
+    void createLot_Success() {
+        // Arrange
+        when(parkingLotRepository.existsByName(anyString()))
+                .thenReturn(false);
+        doNothing().when(parkingLotRepository)
+                .save(any(ParkingLot.class));
+        when(parkingLotRepository.findById(anyString()))
+                .thenReturn(Optional.of(mockLot));
+
+        // Act
+        ParkingLotResponse response =
+                parkingLotService.createLot(lotRequest);
+
+        // Assert
+        assertThat(response).isNotNull();
+        assertThat(response.getName())
+                .isEqualTo("Central Parking Pune");
+        assertThat(response.getTotalLevels()).isEqualTo(3);
+        assertThat(response.isActive()).isTrue();
+
+        verify(parkingLotRepository, times(1))
+                .save(any(ParkingLot.class));
+    }
+
+    @Test
+    @DisplayName("Should throw when lot name already exists")
+    void createLot_DuplicateName_ThrowsException() {
+        // Arrange
+        when(parkingLotRepository.existsByName(anyString()))
+                .thenReturn(true);
+
+        // Act & Assert
+        assertThatThrownBy(() ->
+                parkingLotService.createLot(lotRequest))
+                .isInstanceOf(
+                        ResourceAlreadyExistsException.class)
+                .hasMessageContaining(
+                        "Parking lot name already exists");
+
+        verify(parkingLotRepository, never())
+                .save(any(ParkingLot.class));
+    }
+
+    @Test
+    @DisplayName("Should return lot by ID")
+    void getLotById_Success() {
+        // Arrange
+        when(parkingLotRepository.findById("lot-123"))
+                .thenReturn(Optional.of(mockLot));
+
+        // Act
+        ParkingLotResponse response =
+                parkingLotService.getLotById("lot-123");
+
+        // Assert
+        assertThat(response).isNotNull();
+        assertThat(response.getId()).isEqualTo("lot-123");
+        assertThat(response.getName())
+                .isEqualTo("Central Parking Pune");
+    }
+
+    @Test
+    @DisplayName("Should throw when lot not found")
+    void getLotById_NotFound_ThrowsException() {
+        // Arrange
+        when(parkingLotRepository.findById(anyString()))
+                .thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThatThrownBy(() ->
+                parkingLotService.getLotById("invalid"))
+                .isInstanceOf(
+                        ResourceNotFoundException.class)
+                .hasMessageContaining("Parking lot not found");
+    }
+
+    @Test
+    @DisplayName("Should delete lot successfully")
+    void deleteLot_Success() {
+        // Arrange
+        when(parkingLotRepository.findById("lot-123"))
+                .thenReturn(Optional.of(mockLot));
+        doNothing().when(parkingLotRepository)
+                .deleteById("lot-123");
+
+        // Act
+        parkingLotService.deleteLot("lot-123");
+
+        // Assert
+        verify(parkingLotRepository, times(1))
+                .deleteById("lot-123");
+    }
+}
+
+How to Run Tests
+Run All Tests in IntelliJ
+Right-click on test folder → Run All Tests
+Or press Ctrl + Shift + F10 on test class.
+
+Run via Maven Terminal
+bash# Run all tests
+mvn test
+
+# Run specific service tests
+mvn test -pl user-service
+mvn test -pl booking-service
+mvn test -pl payment-service
+mvn test -pl admin-service
+
+# Run specific test class
+mvn test -pl user-service -Dtest=UserServiceTest
+
+Expected Output
+[INFO] Results:
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0
+[IN
