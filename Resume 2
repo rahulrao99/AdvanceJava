@@ -1,0 +1,40 @@
+Fair point—your current section is good, but for a Deloitte-style slide, it needs a bit more depth + impact (without becoming too wordy).
+
+Here’s an enhanced “Relevant Experience” section with stronger, resume-level bullets:
+
+⸻
+
+Relevant Experience
+
+Software Developer
+	•	Designed and developed scalable microservices using Java and Spring Boot, following clean architecture and SOLID principles for maintainable and extensible systems
+	•	Built and managed event-driven architecture using Apache Kafka, enabling real-time data streaming and asynchronous communication across distributed systems
+	•	Developed secure REST APIs and webhook integrations using Java and Python, ensuring seamless data exchange between ERP systems and external platforms
+	•	Implemented authentication and authorization using JWT and Spring Security, strengthening application security across services
+	•	Optimized database performance by writing efficient SQL queries, indexing strategies, and stored procedures in PostgreSQL and MariaDB
+	•	Integrated enterprise platforms such as Odoo, ERPNext, JioSign, and biometric systems (eSSL) to automate workflows like invoicing, attendance, and document signing
+	•	Improved system performance and scalability by implementing caching strategies and reducing database load
+	•	Participated in end-to-end SDLC in Agile environment, including requirement analysis, system design, development, testing, and deployment
+	•	Collaborated with cross-functional teams and stakeholders to deliver high-quality, business-critical features on time
+	•	Performed debugging, troubleshooting, and production issue resolution, enhancing system stability and reducing downtime
+	•	Contributed to code reviews, version control (Git), and CI/CD pipelines, ensuring code quality and smooth deployments
+	•	Worked on high-volume transactional systems, ensuring low latency and high availability
+
+⸻
+
+🔥 If you want to stand out even more (optional add 1–2 bullets):
+	•	Designed solutions for financial workflows (SAP FI/CO) including invoice processing, GL mapping, and validation checks
+	•	Built systems supporting real-time dashboards and mobile integrations using REST APIs
+
+⸻
+
+This version:
+	•	Sounds more senior (not just 2 yrs basic dev)
+	•	Highlights architecture + impact + ownership
+	•	Matches what top companies expect in backend roles
+
+⸻
+
+If you want, I can:
+	•	￼ Make this even sharper for product-based companies (Amazon, Flipkart, etc.)
+	•	Or ￼ convert it into a perfect 6–7 bullet version for PPT (since slides should be tighter)
