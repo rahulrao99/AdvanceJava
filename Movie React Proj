@@ -1,0 +1,81 @@
+Perfect! Let me first help you get your API key, then we'll kick off Milestone 1.
+
+🎬 Step 1: Get Your TMDb API Key (Free & Best for this project)
+TMDb is the best choice — it's free, has rich data (posters, ratings, genres, trending movies), and is widely used in real projects.
+Follow these steps:
+
+Go to 👉 https://www.themoviedb.org/signup
+Create a free account & verify your email
+Go to 👉 https://www.themoviedb.org/settings/api
+Click "Create" → Choose "Developer"
+Fill in the form:
+
+App Name: Movie Search App
+App URL: http://localhost:3000
+Summary: A React learning project for searching and viewing movies
+
+
+Submit → You'll get your API Key (v3 auth) — copy it!
+
+
+🚀 Step 2: Milestone 1 — Project Setup
+Once you have your API key, run these commands in your terminal:
+1. Create the React App
+bashnpx create-react-app movie-search-app
+cd movie-search-app
+2. Install All Dependencies (everything you'll need across all milestones)
+bashnpm install @mui/material @emotion/react @emotion/styled @mui/icons-material
+npm install react-router-dom
+npm install axios
+npm install @reduxjs/toolkit react-redux
+npm install --save-dev @testing-library/react @testing-library/jest-dom @testing-library/user-event
+3. Create the Folder Structure
+Run this in your project root to create all required folders at once:
+bashmkdir -p src/components src/pages src/services src/store src/hooks src/utils src/tests
+4. Set Up Your Environment Variable
+Create a .env file in the project root:
+REACT_APP_TMDB_API_KEY=your_api_key_here
+REACT_APP_TMDB_BASE_URL=https://api.themoviedb.org/3
+REACT_APP_TMDB_IMAGE_BASE_URL=https://image.tmdb.org/t/p/w500
+
+⚠️ Replace your_api_key_here with your actual TMDb key
+
+5. Add .env to .gitignore (important for security!)
+Your .gitignore already has .env by default with CRA — just double check it's there.
+6. Verify the app runs
+bashnpm start
+
+✅ Milestone 1 Checklist
+TaskStatusReact project created✅Folders: components, pages, services, store, hooks, utils, tests✅All dependencies installed✅API key secured in .env✅App runs on localhost✅
+
+Once you've done this and your app is running on localhost:3000, let me know and we'll jump straight into Milestone 2 — Building the UI components with Material UI (Navbar, SearchBar, MovieCard, Loading, Error components). 🚀You said: before that all keep one thing in mind that we have to develope that appliction in 48 hrs, and from useing the software for writing code you  have to tell mebefore that all keep one thing in mind that we have to develope that appliction in 48 hrs, and from useing the software for writing code you  have to tell meApr 23Claude responded: Got it!Got it! Let me be clear about the development setup first.
+
+💻 IDE / Code Editor Recommendation
+Use Visual Studio Code (VS Code)
+👉 https://code.visualstudio.com/
+It's the industry standard for React development. Here's why:
+
+Free & lightweight
+Best React/JavaScript support
+Huge extension ecosystem
+
+
+🔌 Must-Have VS Code Extensions for this project
+Install these from the Extensions tab (Ctrl+Shift+X):
+ExtensionPurposeES7+ React/Redux/React-Native snippetsFast React boilerplate shortcutsPrettier - Code FormatterAuto-formats your code on saveESLintCatches errors in real timeAuto ImportAuto-suggests & imports componentsGitLensTrack git commits milestone-wiseMaterial Icon ThemeBetter file icons for your folder structureThunder ClientTest your TMDb API calls right inside VS Code
+
+⏱️ 48-Hour Game Plan
+Since you have 48 hours, here's a realistic milestone timeline:
+TimeMilestoneHour 0–2M1: Project Setup + API KeyHour 2–6M2: Material UI + Base ComponentsHour 6–10M3: All 4 Pages createdHour 10–13M4: React Router + NavigationHour 13–16M5: API Integration SetupHour 16–20M6: Search Feature workingHour 20–24M7: Local State (useState/useEffect)Hour 24–30M8: Redux Toolkit + PerformanceHour 30–38M9: Unit TestingHour 38–44M10: Deployment to VercelHour 44–48🔁 Buffer — Bug fixes, polish, README
+
+✅ Key Rule to Follow
+
+I will give you the complete code for every file, every milestone — you just have to copy it into VS Code. No guessing, no gaps. We move fast and clean.
+
+
+Are you ready? Tell me:
+
+✅ Is your TMDb API key ready?
+✅ Did npm start run successfully?
+
+Once confirmed → We go straight into Milestone 2! 🚀
