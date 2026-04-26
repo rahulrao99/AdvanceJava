@@ -1,0 +1,66 @@
+I can see the issue! The old import is commented out but `ReportProblemIcon` is imported but not used in JSX — it still says `ReportProblem` without `Icon`. Let me give you the complete corrected files:
+
+---
+
+## ✅ Fix: Replace ENTIRE `src/pages/NotFoundPage.jsx`
+
+Delete everything and paste this fresh:
+
+```jsx
+import React from 'react';
+import { Box, Typography, Button } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
+import ReportProblemIcon from '@mui/icons-material/ReportProblem';
+
+const NotFoundPage = () => {
+  const navigate = useNavigate();
+
+  return (
+    <Box display="flex" flexDirection="column" alignItems="center"
+      justifyContent="center" minHeight="100vh" sx={{ backgroundColor: '#141414' }} gap={3}>
+      <ReportProblemIcon sx={{ color: '#e50914', fontSize: 80 }} />
+      <Typography variant="h2" color="#fff" fontWeight={700}>404</Typography>
+      <Typography variant="h6" color="#aaa">Oops! Page not found</Typography>
+      <Button variant="contained" onClick={() => navigate('/')}
+        sx={{ backgroundColor: '#e50914', px: 4, '&:hover': { backgroundColor: '#b0070f' } }}>
+        Back to Home
+      </Button>
+    </Box>
+  );
+};
+
+export default NotFoundPage;
+```
+
+---
+
+## ✅ Fix: Replace ENTIRE `src/components/ErrorMessage.jsx`
+
+```jsx
+import React from 'react';
+import { Box, Typography, Button } from '@mui/material';
+import ReportProblemIcon from '@mui/icons-material/ReportProblem';
+import { useNavigate } from 'react-router-dom';
+
+const ErrorMessage = ({ message = 'Something went wrong!' }) => {
+  const navigate = useNavigate();
+
+  return (
+    <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="40vh" gap={2}>
+      <ReportProblemIcon sx={{ color: '#e50914', fontSize: 60 }} />
+      <Typography variant="h6" color="#fff">{message}</Typography>
+      <Button variant="outlined" onClick={() => navigate('/')} sx={{ color: '#e50914', borderColor: '#e50914' }}>
+        Go Home
+      </Button>
+    </Box>
+  );
+};
+
+export default ErrorMessage;
+```
+
+---
+
+Select all code in each file with `Ctrl+A` → delete → paste fresh → `Ctrl+S`
+
+Share screenshot after! 🚀
