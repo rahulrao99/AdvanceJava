@@ -1,0 +1,242 @@
+# 🎉 Milestone 1 & 2 Setup — 100% Complete!
+
+Everything is perfectly in place! ✅
+
+| Task | Status |
+|---|---|
+| All folders created (components, pages, services, store, hooks, utils, tests) | ✅ |
+| All packages installed (MUI, Router, Redux, Axios) | ✅ |
+| `.env` file configured | ✅ |
+
+> The vulnerabilities warning is **normal** — ignore it, it won't affect development.
+
+---
+
+# 🚀 Milestone 2 — Let's Write Code!
+
+We'll now create all files one by one. **Open each file in VS Code and paste the code exactly.**
+
+---
+
+## 📁 File 1: `src/theme.js` — MUI Theme Setup
+
+Create a new file `src/theme.js` and paste:
+
+```javascript
+import { createTheme } from '@mui/material/styles';
+
+const theme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: { main: '#e50914' },
+    secondary: { main: '#ffffff' },
+    background: { default: '#141414', paper: '#1f1f1f' },
+  },
+  typography: {
+    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+    h4: { fontWeight: 700 },
+    h6: { fontWeight: 600 },
+  },
+});
+
+export default theme;
+```
+
+---
+
+## 📁 File 2: `src/components/Navbar.jsx`
+
+Create `src/components/Navbar.jsx`:
+
+```jsx
+import React from 'react';
+import { AppBar, Toolbar, Typography, Button, Box } from '@mui/material';
+import MovieIcon from '@mui/icons-material/Movie';
+import { Link, useNavigate } from 'react-router-dom';
+
+const Navbar = () => {
+  const navigate = useNavigate();
+
+  return (
+    <AppBar position="sticky" sx={{ backgroundColor: '#141414', borderBottom: '2px solid #e50914' }}>
+      <Toolbar sx={{ justifyContent: 'space-between' }}>
+        <Box display="flex" alignItems="center" gap={1} sx={{ cursor: 'pointer' }} onClick={() => navigate('/')}>
+          <MovieIcon sx={{ color: '#e50914', fontSize: 32 }} />
+          <Typography variant="h6" sx={{ color: '#e50914', fontWeight: 700, letterSpacing: 1 }}>
+            CineSearch
+          </Typography>
+        </Box>
+        <Box display="flex" gap={2}>
+          <Button component={Link} to="/" sx={{ color: '#fff' }}>Home</Button>
+          <Button component={Link} to="/favorites" sx={{ color: '#fff' }}>Favourites</Button>
+        </Box>
+      </Toolbar>
+    </AppBar>
+  );
+};
+
+export default Navbar;
+```
+
+---
+
+## 📁 File 3: `src/components/SearchBar.jsx`
+
+```jsx
+import React, { useState } from 'react';
+import { Box, TextField, Button, InputAdornment } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
+import { useNavigate } from 'react-router-dom';
+
+const SearchBar = ({ initialQuery = '' }) => {
+  const [query, setQuery] = useState(initialQuery);
+  const navigate = useNavigate();
+
+  const handleSearch = () => {
+    if (query.trim()) {
+      navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') handleSearch();
+  };
+
+  return (
+    <Box display="flex" gap={1} sx={{ width: '100%', maxWidth: 600, mx: 'auto', my: 3 }}>
+      <TextField
+        fullWidth
+        variant="outlined"
+        placeholder="Search for movies..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={handleKeyDown}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon sx={{ color: '#e50914' }} />
+            </InputAdornment>
+          ),
+        }}
+        sx={{
+          backgroundColor: '#1f1f1f',
+          borderRadius: 1,
+          input: { color: '#fff' },
+          '& .MuiOutlinedInput-root': {
+            '& fieldset': { borderColor: '#333' },
+            '&:hover fieldset': { borderColor: '#e50914' },
+            '&.Mui-focused fieldset': { borderColor: '#e50914' },
+          },
+        }}
+      />
+      <Button variant="contained" onClick={handleSearch}
+        sx={{ backgroundColor: '#e50914', px: 3, '&:hover': { backgroundColor: '#b0070f' } }}>
+        Search
+      </Button>
+    </Box>
+  );
+};
+
+export default SearchBar;
+```
+
+---
+
+## 📁 File 4: `src/components/MovieCard.jsx`
+
+```jsx
+import React from 'react';
+import { Card, CardMedia, CardContent, Typography, Box, Chip } from '@mui/material';
+import StarIcon from '@mui/icons-material/Star';
+import { useNavigate } from 'react-router-dom';
+
+const MovieCard = ({ movie }) => {
+  const navigate = useNavigate();
+  const poster = movie.Poster !== 'N/A' ? movie.Poster : 'https://via.placeholder.com/300x445?text=No+Image';
+
+  return (
+    <Card onClick={() => navigate(`/movie/${movie.imdbID}`)}
+      sx={{
+        backgroundColor: '#1f1f1f', cursor: 'pointer', height: '100%',
+        transition: 'transform 0.2s, box-shadow 0.2s',
+        '&:hover': { transform: 'scale(1.04)', boxShadow: '0 8px 24px rgba(229,9,20,0.4)' },
+      }}>
+      <CardMedia component="img" image={poster} alt={movie.Title} sx={{ height: 300, objectFit: 'cover' }} />
+      <CardContent>
+        <Typography variant="subtitle1" fontWeight={700} color="#fff" noWrap>{movie.Title}</Typography>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mt={1}>
+          <Chip label={movie.Year} size="small" sx={{ backgroundColor: '#333', color: '#aaa' }} />
+          <Box display="flex" alignItems="center" gap={0.5}>
+            <StarIcon sx={{ color: '#f5c518', fontSize: 16 }} />
+            <Typography variant="caption" color="#aaa">{movie.imdbRating || 'N/A'}</Typography>
+          </Box>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default MovieCard;
+```
+
+---
+
+## 📁 File 5: `src/components/Loading.jsx`
+
+```jsx
+import React from 'react';
+import { Box, CircularProgress, Typography } from '@mui/material';
+
+const Loading = () => (
+  <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="40vh" gap={2}>
+    <CircularProgress sx={{ color: '#e50914' }} size={60} />
+    <Typography color="#aaa">Loading movies...</Typography>
+  </Box>
+);
+
+export default Loading;
+```
+
+---
+
+## 📁 File 6: `src/components/ErrorMessage.jsx`
+
+```jsx
+import React from 'react';
+import { Box, Typography, Button } from '@mui/material';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import { useNavigate } from 'react-router-dom';
+
+const ErrorMessage = ({ message = 'Something went wrong!' }) => {
+  const navigate = useNavigate();
+
+  return (
+    <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="40vh" gap={2}>
+      <ErrorOutlineIcon sx={{ color: '#e50914', fontSize: 60 }} />
+      <Typography variant="h6" color="#fff">{message}</Typography>
+      <Button variant="outlined" onClick={() => navigate('/')} sx={{ color: '#e50914', borderColor: '#e50914' }}>
+        Go Home
+      </Button>
+    </Box>
+  );
+};
+
+export default ErrorMessage;
+```
+
+---
+
+## ✅ Milestone 2 Checklist
+
+| Component | Status |
+|---|---|
+| `theme.js` | ✅ |
+| `Navbar.jsx` | ✅ |
+| `SearchBar.jsx` | ✅ |
+| `MovieCard.jsx` | ✅ |
+| `Loading.jsx` | ✅ |
+| `ErrorMessage.jsx` | ✅ |
+
+---
+
+Create all 6 files, paste the code, save each one with `Ctrl+S` and tell me when done → **We move to Milestone 3 — Pages!** 🎬
