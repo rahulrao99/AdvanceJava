@@ -1,0 +1,361 @@
+# 🚀 Milestone 3 — Creating All Pages!
+
+Create these files inside `src/pages/` folder one by one.
+
+---
+
+## 📁 File 1: `src/pages/HomePage.jsx`
+
+```jsx
+import React, { useState, useEffect } from 'react';
+import { Container, Typography, Box, Grid } from '@mui/material';
+import SearchBar from '../components/SearchBar';
+import MovieCard from '../components/MovieCard';
+import Loading from '../components/Loading';
+import ErrorMessage from '../components/ErrorMessage';
+import { searchMovies } from '../services/movieService';
+
+const HomePage = () => {
+  const [movies, setMovies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchPopular = async () => {
+      try {
+        setLoading(true);
+        const data = await searchMovies('marvel');
+        setMovies(data);
+      } catch (err) {
+        setError('Failed to load popular movies.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPopular();
+  }, []);
+
+  return (
+    <Box sx={{ backgroundColor: '#141414', minHeight: '100vh', py: 4 }}>
+      <Container maxWidth="lg">
+        <Typography variant="h4" color="#e50914" fontWeight={700} textAlign="center" mb={1}>
+          🎬 CineSearch
+        </Typography>
+        <Typography variant="subtitle1" color="#aaa" textAlign="center" mb={3}>
+          Search millions of movies instantly
+        </Typography>
+
+        <SearchBar />
+
+        <Typography variant="h5" color="#fff" fontWeight={700} mt={5} mb={3}>
+          🔥 Popular Movies
+        </Typography>
+
+        {loading && <Loading />}
+        {error && <ErrorMessage message={error} />}
+
+        {!loading && !error && (
+          <Grid container spacing={3}>
+            {movies.map((movie) => (
+              <Grid item xs={12} sm={6} md={4} lg={3} key={movie.imdbID}>
+                <MovieCard movie={movie} />
+              </Grid>
+            ))}
+          </Grid>
+        )}
+      </Container>
+    </Box>
+  );
+};
+
+export default HomePage;
+```
+
+---
+
+## 📁 File 2: `src/pages/SearchResultsPage.jsx`
+
+```jsx
+import React, { useState, useEffect } from 'react';
+import { Container, Typography, Box, Grid } from '@mui/material';
+import { useSearchParams } from 'react-router-dom';
+import SearchBar from '../components/SearchBar';
+import MovieCard from '../components/MovieCard';
+import Loading from '../components/Loading';
+import ErrorMessage from '../components/ErrorMessage';
+import { searchMovies } from '../services/movieService';
+
+const SearchResultsPage = () => {
+  const [searchParams] = useSearchParams();
+  const query = searchParams.get('q') || '';
+  const [movies, setMovies] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!query) return;
+    const fetchResults = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const data = await searchMovies(query);
+        setMovies(data);
+      } catch (err) {
+        setError(err.message || 'Failed to fetch results.');
+        setMovies([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchResults();
+  }, [query]);
+
+  return (
+    <Box sx={{ backgroundColor: '#141414', minHeight: '100vh', py: 4 }}>
+      <Container maxWidth="lg">
+        <SearchBar initialQuery={query} />
+
+        <Typography variant="h5" color="#fff" fontWeight={700} mb={3}>
+          Results for: <span style={{ color: '#e50914' }}>"{query}"</span>
+        </Typography>
+
+        {loading && <Loading />}
+        {error && <ErrorMessage message={error} />}
+
+        {!loading && !error && movies.length === 0 && (
+          <Box textAlign="center" mt={8}>
+            <Typography variant="h6" color="#aaa">No movies found for "{query}"</Typography>
+            <Typography color="#555" mt={1}>Try searching with a different title</Typography>
+          </Box>
+        )}
+
+        {!loading && !error && movies.length > 0 && (
+          <Grid container spacing={3}>
+            {movies.map((movie) => (
+              <Grid item xs={12} sm={6} md={4} lg={3} key={movie.imdbID}>
+                <MovieCard movie={movie} />
+              </Grid>
+            ))}
+          </Grid>
+        )}
+      </Container>
+    </Box>
+  );
+};
+
+export default SearchResultsPage;
+```
+
+---
+
+## 📁 File 3: `src/pages/MovieDetailPage.jsx`
+
+```jsx
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Container, Box, Typography, Grid, Chip, Button, Divider } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import StarIcon from '@mui/icons-material/Star';
+import FavoriteIcon from '@mui/icons-material/Favorite';
+import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
+import { useDispatch, useSelector } from 'react-redux';
+import { addFavorite, removeFavorite } from '../store/favoritesSlice';
+import { getMovieById } from '../services/movieService';
+import Loading from '../components/Loading';
+import ErrorMessage from '../components/ErrorMessage';
+
+const MovieDetailPage = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const favorites = useSelector((state) => state.favorites.items);
+  const isFavorite = favorites.some((m) => m.imdbID === id);
+
+  const [movie, setMovie] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchMovie = async () => {
+      try {
+        setLoading(true);
+        const data = await getMovieById(id);
+        setMovie(data);
+      } catch (err) {
+        setError('Failed to load movie details.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMovie();
+  }, [id]);
+
+  const handleFavorite = () => {
+    if (isFavorite) {
+      dispatch(removeFavorite(id));
+    } else {
+      dispatch(addFavorite(movie));
+    }
+  };
+
+  if (loading) return <Loading />;
+  if (error) return <ErrorMessage message={error} />;
+  if (!movie) return null;
+
+  const poster = movie.Poster !== 'N/A' ? movie.Poster : 'https://via.placeholder.com/300x445?text=No+Image';
+
+  return (
+    <Box sx={{ backgroundColor: '#141414', minHeight: '100vh', py: 4 }}>
+      <Container maxWidth="lg">
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}
+          sx={{ color: '#e50914', mb: 3, '&:hover': { backgroundColor: '#1f1f1f' } }}>
+          Back
+        </Button>
+
+        <Grid container spacing={4}>
+          <Grid item xs={12} md={4}>
+            <Box component="img" src={poster} alt={movie.Title}
+              sx={{ width: '100%', borderRadius: 2, boxShadow: '0 8px 32px rgba(229,9,20,0.3)' }} />
+          </Grid>
+
+          <Grid item xs={12} md={8}>
+            <Typography variant="h4" color="#fff" fontWeight={700}>{movie.Title}</Typography>
+
+            <Box display="flex" alignItems="center" gap={1} mt={1} mb={2}>
+              <StarIcon sx={{ color: '#f5c518' }} />
+              <Typography color="#f5c518" fontWeight={700}>{movie.imdbRating}</Typography>
+              <Typography color="#aaa">/ 10 ({movie.imdbVotes} votes)</Typography>
+            </Box>
+
+            <Box display="flex" flexWrap="wrap" gap={1} mb={3}>
+              {movie.Genre?.split(',').map((g) => (
+                <Chip key={g} label={g.trim()} sx={{ backgroundColor: '#e50914', color: '#fff' }} />
+              ))}
+            </Box>
+
+            <Divider sx={{ borderColor: '#333', mb: 3 }} />
+
+            <Typography color="#ccc" mb={2} lineHeight={1.8}>{movie.Plot}</Typography>
+
+            <Box display="flex" flexDirection="column" gap={1} mb={3}>
+              <Typography color="#aaa"><strong style={{ color: '#fff' }}>Director:</strong> {movie.Director}</Typography>
+              <Typography color="#aaa"><strong style={{ color: '#fff' }}>Cast:</strong> {movie.Actors}</Typography>
+              <Typography color="#aaa"><strong style={{ color: '#fff' }}>Released:</strong> {movie.Released}</Typography>
+              <Typography color="#aaa"><strong style={{ color: '#fff' }}>Runtime:</strong> {movie.Runtime}</Typography>
+              <Typography color="#aaa"><strong style={{ color: '#fff' }}>Language:</strong> {movie.Language}</Typography>
+              <Typography color="#aaa"><strong style={{ color: '#fff' }}>Box Office:</strong> {movie.BoxOffice}</Typography>
+            </Box>
+
+            <Button variant="contained" startIcon={isFavorite ? <FavoriteIcon /> : <FavoriteBorderIcon />}
+              onClick={handleFavorite}
+              sx={{
+                backgroundColor: isFavorite ? '#b0070f' : '#e50914',
+                '&:hover': { backgroundColor: '#b0070f' }
+              }}>
+              {isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+            </Button>
+          </Grid>
+        </Grid>
+      </Container>
+    </Box>
+  );
+};
+
+export default MovieDetailPage;
+```
+
+---
+
+## 📁 File 4: `src/pages/FavoritesPage.jsx`
+
+```jsx
+import React from 'react';
+import { Container, Typography, Box, Grid, Button } from '@mui/material';
+import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
+import MovieCard from '../components/MovieCard';
+import FavoriteIcon from '@mui/icons-material/Favorite';
+
+const FavoritesPage = () => {
+  const favorites = useSelector((state) => state.favorites.items);
+  const navigate = useNavigate();
+
+  return (
+    <Box sx={{ backgroundColor: '#141414', minHeight: '100vh', py: 4 }}>
+      <Container maxWidth="lg">
+        <Box display="flex" alignItems="center" gap={1} mb={4}>
+          <FavoriteIcon sx={{ color: '#e50914', fontSize: 32 }} />
+          <Typography variant="h4" color="#fff" fontWeight={700}>My Favourites</Typography>
+        </Box>
+
+        {favorites.length === 0 ? (
+          <Box textAlign="center" mt={8}>
+            <Typography variant="h6" color="#aaa">No favourites yet!</Typography>
+            <Typography color="#555" mt={1}>Go search for movies and add them here</Typography>
+            <Button variant="contained" onClick={() => navigate('/')}
+              sx={{ mt: 3, backgroundColor: '#e50914', '&:hover': { backgroundColor: '#b0070f' } }}>
+              Browse Movies
+            </Button>
+          </Box>
+        ) : (
+          <Grid container spacing={3}>
+            {favorites.map((movie) => (
+              <Grid item xs={12} sm={6} md={4} lg={3} key={movie.imdbID}>
+                <MovieCard movie={movie} />
+              </Grid>
+            ))}
+          </Grid>
+        )}
+      </Container>
+    </Box>
+  );
+};
+
+export default FavoritesPage;
+```
+
+---
+
+## 📁 File 5: `src/pages/NotFoundPage.jsx`
+
+```jsx
+import React from 'react';
+import { Box, Typography, Button } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+
+const NotFoundPage = () => {
+  const navigate = useNavigate();
+
+  return (
+    <Box display="flex" flexDirection="column" alignItems="center"
+      justifyContent="center" minHeight="100vh" sx={{ backgroundColor: '#141414' }} gap={3}>
+      <ErrorOutlineIcon sx={{ color: '#e50914', fontSize: 80 }} />
+      <Typography variant="h2" color="#fff" fontWeight={700}>404</Typography>
+      <Typography variant="h6" color="#aaa">Oops! Page not found</Typography>
+      <Button variant="contained" onClick={() => navigate('/')}
+        sx={{ backgroundColor: '#e50914', px: 4, '&:hover': { backgroundColor: '#b0070f' } }}>
+        Back to Home
+      </Button>
+    </Box>
+  );
+};
+
+export default NotFoundPage;
+```
+
+---
+
+## ✅ Milestone 3 Checklist
+
+| Page | Status |
+|---|---|
+| `HomePage.jsx` | ✅ |
+| `SearchResultsPage.jsx` | ✅ |
+| `MovieDetailPage.jsx` | ✅ |
+| `FavoritesPage.jsx` | ✅ |
+| `NotFoundPage.jsx` | ✅ |
+
+---
+
+Create all 5 files inside `src/pages/`, paste and save each. Tell me when done → **Milestone 4 — Routing + Milestone 5 — API Service!** 🚀
