@@ -1,0 +1,171 @@
+# 🚀 Milestone 4 & 5 — Routing + API Service!
+
+We'll do both together since they're connected. Create these files one by one.
+
+---
+
+## 📁 Milestone 5 First: `src/services/movieService.js`
+(Pages depend on this, so create it first)
+
+```javascript
+import axios from 'axios';
+
+const API_KEY = process.env.REACT_APP_OMDB_API_KEY;
+const BASE_URL = process.env.REACT_APP_OMDB_BASE_URL;
+
+const apiClient = axios.create({
+  baseURL: BASE_URL,
+});
+
+// Search movies by title
+export const searchMovies = async (query) => {
+  const response = await apiClient.get('/', {
+    params: {
+      apikey: API_KEY,
+      s: query,
+      type: 'movie',
+    },
+  });
+
+  if (response.data.Response === 'False') {
+    throw new Error(response.data.Error || 'No movies found');
+  }
+
+  return response.data.Search;
+};
+
+// Get movie details by IMDb ID
+export const getMovieById = async (id) => {
+  const response = await apiClient.get('/', {
+    params: {
+      apikey: API_KEY,
+      i: id,
+      plot: 'full',
+    },
+  });
+
+  if (response.data.Response === 'False') {
+    throw new Error(response.data.Error || 'Movie not found');
+  }
+
+  return response.data;
+};
+```
+
+---
+
+## 📁 Milestone 4: `src/store/favoritesSlice.js`
+(Routing needs Redux store ready)
+
+```javascript
+import { createSlice } from '@reduxjs/toolkit';
+
+const favoritesSlice = createSlice({
+  name: 'favorites',
+  initialState: {
+    items: [],
+  },
+  reducers: {
+    addFavorite: (state, action) => {
+      const exists = state.items.find((m) => m.imdbID === action.payload.imdbID);
+      if (!exists) {
+        state.items.push(action.payload);
+      }
+    },
+    removeFavorite: (state, action) => {
+      state.items = state.items.filter((m) => m.imdbID !== action.payload);
+    },
+  },
+});
+
+export const { addFavorite, removeFavorite } = favoritesSlice.actions;
+export default favoritesSlice.reducer;
+```
+
+---
+
+## 📁 `src/store/index.js`
+
+```javascript
+import { configureStore } from '@reduxjs/toolkit';
+import favoritesReducer from './favoritesSlice';
+
+const store = configureStore({
+  reducer: {
+    favorites: favoritesReducer,
+  },
+});
+
+export default store;
+```
+
+---
+
+## 📁 `src/App.js` — Routing Setup (Replace entire file)
+
+```jsx
+import React, { Suspense, lazy } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { ThemeProvider } from '@mui/material/styles';
+import { CssBaseline } from '@mui/material';
+import { Provider } from 'react-redux';
+import store from './store/index';
+import theme from './theme';
+import Navbar from './components/Navbar';
+import Loading from './components/Loading';
+
+// Lazy loaded pages
+const HomePage = lazy(() => import('./pages/HomePage'));
+const SearchResultsPage = lazy(() => import('./pages/SearchResultsPage'));
+const MovieDetailPage = lazy(() => import('./pages/MovieDetailPage'));
+const FavoritesPage = lazy(() => import('./pages/FavoritesPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+
+function App() {
+  return (
+    <Provider store={store}>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Router>
+          <Navbar />
+          <Suspense fallback={<Loading />}>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/search" element={<SearchResultsPage />} />
+              <Route path="/movie/:id" element={<MovieDetailPage />} />
+              <Route path="/favorites" element={<FavoritesPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </Suspense>
+        </Router>
+      </ThemeProvider>
+    </Provider>
+  );
+}
+
+export default App;
+```
+
+---
+
+## ✅ Milestone 4 & 5 Checklist
+
+| Task | Status |
+|---|---|
+| `movieService.js` — API calls | ✅ |
+| `favoritesSlice.js` — Redux slice | ✅ |
+| `store/index.js` — Redux store | ✅ |
+| `App.js` — All routes configured | ✅ |
+| Lazy loading applied | ✅ |
+| 404 fallback route | ✅ |
+| Dynamic route `/movie/:id` | ✅ |
+
+---
+
+Create all 4 files, paste and save. Then run:
+
+```bash
+npm start
+```
+
+Share a screenshot and we verify everything is working! 🚀
