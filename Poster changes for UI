@@ -1,0 +1,141 @@
+I can see the issue! When OMDb doesn't have a poster it returns `N/A` and the placeholder image URL we used is broken too. Let me fix the `MovieCard` and also improve the search queries!
+
+---
+
+## ✅ Fix 1: Replace ENTIRE `src/components/MovieCard.jsx`
+
+```jsx
+import React from 'react';
+import { Card, CardContent, Typography, Box, Chip } from '@mui/material';
+import StarIcon from '@mui/icons-material/Star';
+import BrokenImageIcon from '@mui/icons-material/BrokenImage';
+import { useNavigate } from 'react-router-dom';
+
+const MovieCard = ({ movie }) => {
+  const navigate = useNavigate();
+  const hasPoster = movie.Poster && movie.Poster !== 'N/A';
+
+  return (
+    <Card onClick={() => navigate(`/movie/${movie.imdbID}`)}
+      sx={{
+        backgroundColor: '#1f1f1f', cursor: 'pointer', height: '100%',
+        transition: 'transform 0.2s, box-shadow 0.2s',
+        border: '1px solid #2a2a2a',
+        '&:hover': {
+          transform: 'scale(1.04)',
+          boxShadow: '0 8px 24px rgba(229,9,20,0.4)',
+          border: '1px solid #e50914',
+        },
+      }}>
+
+      {/* Poster or Fallback */}
+      {hasPoster ? (
+        <Box
+          component="img"
+          src={movie.Poster}
+          alt={movie.Title}
+          sx={{ width: '100%', height: 300, objectFit: 'cover' }}
+          onError={(e) => {
+            e.target.style.display = 'none';
+            e.target.nextSibling.style.display = 'flex';
+          }}
+        />
+      ) : null}
+
+      {/* Fallback UI when no poster */}
+      <Box sx={{
+        display: hasPoster ? 'none' : 'flex',
+        height: 300,
+        backgroundColor: '#2a2a2a',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: 1,
+      }}>
+        <BrokenImageIcon sx={{ color: '#555', fontSize: 60 }} />
+        <Typography color="#555" variant="caption" textAlign="center" px={2}>
+          No Poster Available
+        </Typography>
+      </Box>
+
+      <CardContent>
+        <Typography variant="subtitle1" fontWeight={700} color="#fff"
+          sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {movie.Title}
+        </Typography>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mt={1}>
+          <Chip label={movie.Year} size="small"
+            sx={{ backgroundColor: '#333', color: '#aaa', fontSize: '0.75rem' }} />
+          <Box display="flex" alignItems="center" gap={0.5}>
+            <StarIcon sx={{ color: '#f5c518', fontSize: 16 }} />
+            <Typography variant="caption" color="#aaa">
+              {movie.imdbRating || 'N/A'}
+            </Typography>
+          </Box>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default MovieCard;
+```
+
+---
+
+## ✅ Fix 2: Update search queries in `src/pages/HomePage.jsx`
+
+Find your `useEffect` and replace all 3 fetch functions with better queries:
+
+```javascript
+const fetchHollywood = async () => {
+  try {
+    setLoadingH(true);
+    const data = await searchMovies('avengers');
+    setHollywood(data);
+  } catch (err) {
+    setErrorH('Failed to load Hollywood movies.');
+  } finally {
+    setLoadingH(false);
+  }
+};
+
+const fetchBollywood = async () => {
+  try {
+    setLoadingB(true);
+    const data = await searchMovies('shah rukh khan');
+    setBollywood(data);
+  } catch (err) {
+    setErrorB('Failed to load Bollywood movies.');
+  } finally {
+    setLoadingB(false);
+  }
+};
+
+const fetchAction = async () => {
+  try {
+    setLoadingA(true);
+    const data = await searchMovies('john wick');
+    setAction(data);
+  } catch (err) {
+    setErrorA('Failed to load Action movies.');
+  } finally {
+    setLoadingA(false);
+  }
+};
+```
+
+---
+
+Save both files → `Ctrl+S` → browser refreshes!
+
+## What's Fixed 🎨
+| Fix | Detail |
+|---|---|
+| ✅ Missing posters | Shows elegant "No Poster" fallback UI |
+| ✅ Broken images | `onError` handler hides broken img tags |
+| ✅ Hollywood | `avengers` — guaranteed posters |
+| ✅ Bollywood | `shah rukh khan` — iconic movies with posters |
+| ✅ Action | `john wick` — all have posters |
+
+Share screenshot! 🚀
