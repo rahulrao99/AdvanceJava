@@ -1,0 +1,354 @@
+I can see the issues! Let me fix all 3 problems:
+
+1. 🎨 Better Hero alignment
+2. 💅 Better Navbar
+3. 🎬 Better movie search queries for latest hits
+
+---
+
+## ✅ Fix 1: Replace ENTIRE `src/components/Navbar.jsx`
+
+```jsx
+import React, { useState } from 'react';
+import {
+  AppBar, Toolbar, Typography, Button, Box,
+  IconButton, Drawer, List, ListItem, ListItemText
+} from '@mui/material';
+import MovieIcon from '@mui/icons-material/Movie';
+import MenuIcon from '@mui/icons-material/Menu';
+import FavoriteIcon from '@mui/icons-material/Favorite';
+import HomeIcon from '@mui/icons-material/Home';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+
+const Navbar = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const navItems = [
+    { label: 'Home', path: '/', icon: <HomeIcon fontSize="small" /> },
+    { label: 'Favourites', path: '/favorites', icon: <FavoriteIcon fontSize="small" /> },
+  ];
+
+  return (
+    <>
+      <AppBar position="sticky" elevation={0} sx={{
+        background: 'linear-gradient(90deg, #0a0a0a 0%, #1a0000 50%, #0a0a0a 100%)',
+        borderBottom: '2px solid #e50914',
+        backdropFilter: 'blur(10px)',
+      }}>
+        <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 } }}>
+
+          {/* Logo */}
+          <Box display="flex" alignItems="center" gap={1}
+            sx={{ cursor: 'pointer' }} onClick={() => navigate('/')}>
+            <Box sx={{
+              backgroundColor: '#e50914', borderRadius: '8px',
+              p: 0.5, display: 'flex', alignItems: 'center'
+            }}>
+              <MovieIcon sx={{ color: '#fff', fontSize: 24 }} />
+            </Box>
+            <Typography variant="h6" sx={{
+              fontWeight: 900, letterSpacing: 2,
+              background: 'linear-gradient(90deg, #e50914, #ff6b6b)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}>
+              CINESEARCH
+            </Typography>
+          </Box>
+
+          {/* Desktop Nav */}
+          <Box display={{ xs: 'none', md: 'flex' }} gap={1} alignItems="center">
+            {navItems.map((item) => (
+              <Button key={item.label}
+                component={Link} to={item.path}
+                startIcon={item.icon}
+                sx={{
+                  color: location.pathname === item.path ? '#e50914' : '#fff',
+                  fontWeight: location.pathname === item.path ? 700 : 400,
+                  borderBottom: location.pathname === item.path ? '2px solid #e50914' : '2px solid transparent',
+                  borderRadius: 0,
+                  px: 2,
+                  '&:hover': { color: '#e50914', backgroundColor: 'transparent' },
+                }}>
+                {item.label}
+              </Button>
+            ))}
+          </Box>
+
+          {/* Mobile Menu */}
+          <IconButton sx={{ display: { xs: 'flex', md: 'none' }, color: '#fff' }}
+            onClick={() => setDrawerOpen(true)}>
+            <MenuIcon />
+          </IconButton>
+        </Toolbar>
+      </AppBar>
+
+      {/* Mobile Drawer */}
+      <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}
+        PaperProps={{ sx: { backgroundColor: '#1a0000', width: 220 } }}>
+        <List sx={{ mt: 4 }}>
+          {navItems.map((item) => (
+            <ListItem key={item.label} onClick={() => { navigate(item.path); setDrawerOpen(false); }}
+              sx={{ cursor: 'pointer', '&:hover': { backgroundColor: '#e5091422' } }}>
+              <Box sx={{ color: '#e50914', mr: 2 }}>{item.icon}</Box>
+              <ListItemText primary={item.label} sx={{ color: '#fff' }} />
+            </ListItem>
+          ))}
+        </List>
+      </Drawer>
+    </>
+  );
+};
+
+export default Navbar;
+```
+
+---
+
+## ✅ Fix 2: Replace ENTIRE `src/pages/HomePage.jsx`
+
+```jsx
+import React, { useState, useEffect } from 'react';
+import { Container, Typography, Box, Grid, Divider } from '@mui/material';
+import SearchBar from '../components/SearchBar';
+import MovieCard from '../components/MovieCard';
+import Loading from '../components/Loading';
+import ErrorMessage from '../components/ErrorMessage';
+import { searchMovies } from '../services/movieService';
+import { useNavigate } from 'react-router-dom';
+
+const Section = ({ title, emoji, movies, loading, error }) => (
+  <Box mb={6}>
+    <Box display="flex" alignItems="center" gap={1} mb={3}>
+      <Typography variant="h5" color="#fff" fontWeight={700}>
+        {emoji} {title}
+      </Typography>
+      <Divider sx={{ flex: 1, borderColor: '#e50914', ml: 2 }} />
+    </Box>
+    {loading && <Loading />}
+    {error && <ErrorMessage message={error} />}
+    {!loading && !error && (
+      <Grid container spacing={3}>
+        {movies.map((movie) => (
+          <Grid item xs={12} sm={6} md={4} lg={3} key={movie.imdbID}>
+            <MovieCard movie={movie} />
+          </Grid>
+        ))}
+      </Grid>
+    )}
+  </Box>
+);
+
+const genres = [
+  { label: '💥 Action', query: 'action 2023' },
+  { label: '😂 Comedy', query: 'comedy 2024' },
+  { label: '💕 Romance', query: 'romance 2023' },
+  { label: '👻 Horror', query: 'horror 2023' },
+  { label: '🚀 Sci-Fi', query: 'sci-fi 2023' },
+  { label: '🎭 Thriller', query: 'thriller 2023' },
+  { label: '🎪 Bollywood', query: 'hindi 2024' },
+  { label: '🦸 Marvel', query: 'marvel 2023' },
+];
+
+const HomePage = () => {
+  const navigate = useNavigate();
+  const [hollywood, setHollywood] = useState([]);
+  const [bollywood, setBollywood] = useState([]);
+  const [action, setAction] = useState([]);
+  const [loadingH, setLoadingH] = useState(true);
+  const [loadingB, setLoadingB] = useState(true);
+  const [loadingA, setLoadingA] = useState(true);
+  const [errorH, setErrorH] = useState('');
+  const [errorB, setErrorB] = useState('');
+  const [errorA, setErrorA] = useState('');
+
+  useEffect(() => {
+    const fetchHollywood = async () => {
+      try {
+        setLoadingH(true);
+        const data = await searchMovies('superhero 2023');
+        setHollywood(data);
+      } catch (err) {
+        setErrorH('Failed to load Hollywood movies.');
+      } finally {
+        setLoadingH(false);
+      }
+    };
+
+    const fetchBollywood = async () => {
+      try {
+        setLoadingB(true);
+        const data = await searchMovies('hindi 2024');
+        setBollywood(data);
+      } catch (err) {
+        setErrorB('Failed to load Bollywood movies.');
+      } finally {
+        setLoadingB(false);
+      }
+    };
+
+    const fetchAction = async () => {
+      try {
+        setLoadingA(true);
+        const data = await searchMovies('action thriller 2023');
+        setAction(data);
+      } catch (err) {
+        setErrorA('Failed to load Action movies.');
+      } finally {
+        setLoadingA(false);
+      }
+    };
+
+    fetchHollywood();
+    fetchBollywood();
+    fetchAction();
+  }, []);
+
+  return (
+    <Box sx={{ backgroundColor: '#141414', minHeight: '100vh' }}>
+
+      {/* Hero Section */}
+      <Box sx={{
+        minHeight: '75vh',
+        background: 'radial-gradient(ellipse at top, #4a0000 0%, #1a0000 40%, #141414 100%)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        px: 2,
+        py: 6,
+        textAlign: 'center',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        {/* Background glow circles */}
+        <Box sx={{
+          position: 'absolute', width: 400, height: 400,
+          borderRadius: '50%', top: -100, left: -100,
+          background: 'radial-gradient(circle, rgba(229,9,20,0.15) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
+        <Box sx={{
+          position: 'absolute', width: 300, height: 300,
+          borderRadius: '50%', bottom: -50, right: -50,
+          background: 'radial-gradient(circle, rgba(229,9,20,0.1) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
+
+        <Box position="relative" zIndex={1} width="100%" maxWidth={700}>
+          <Typography variant="h2" color="#fff" fontWeight={900}
+            sx={{ textShadow: '0 4px 30px rgba(229,9,20,0.5)', mb: 1, fontSize: { xs: '2.5rem', md: '3.5rem' } }}>
+            🎬 CineSearch
+          </Typography>
+          <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.6)', mb: 4, fontWeight: 300 }}>
+            Discover Hollywood & Bollywood's finest — all in one place
+          </Typography>
+
+          {/* Search Bar */}
+          <SearchBar />
+
+          {/* Stats */}
+          <Box display="flex" justifyContent="center" gap={{ xs: 3, md: 6 }} mt={5} flexWrap="wrap">
+            {[
+              { label: 'Movies', value: '500K+' },
+              { label: 'Languages', value: '50+' },
+              { label: 'Genres', value: '30+' },
+            ].map((stat) => (
+              <Box key={stat.label} textAlign="center">
+                <Typography variant="h4" color="#e50914" fontWeight={900}>{stat.value}</Typography>
+                <Typography color="rgba(255,255,255,0.5)" variant="body2" letterSpacing={1}>
+                  {stat.label}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Genre Filter Bar */}
+      <Box sx={{
+        background: 'linear-gradient(90deg, #0a0a0a, #1f0000, #0a0a0a)',
+        py: 2.5, borderTop: '1px solid #2a0000',
+        borderBottom: '1px solid #2a0000',
+      }}>
+        <Container maxWidth="lg">
+          <Box display="flex" gap={1.5} flexWrap="wrap" justifyContent="center">
+            {genres.map((genre) => (
+              <Box key={genre.label}
+                onClick={() => navigate(`/search?q=${encodeURIComponent(genre.query)}`)}
+                sx={{
+                  px: 2.5, py: 0.8, borderRadius: 5,
+                  border: '1px solid rgba(229,9,20,0.4)',
+                  color: '#ccc', cursor: 'pointer',
+                  fontSize: '0.85rem', fontWeight: 500,
+                  transition: 'all 0.25s',
+                  '&:hover': {
+                    backgroundColor: '#e50914',
+                    color: '#fff',
+                    border: '1px solid #e50914',
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 4px 15px rgba(229,9,20,0.4)',
+                  }
+                }}>
+                {genre.label}
+              </Box>
+            ))}
+          </Box>
+        </Container>
+      </Box>
+
+      {/* Movie Sections */}
+      <Container maxWidth="lg" sx={{ py: 6 }}>
+        <Section title="Hollywood Blockbusters" emoji="🌟"
+          movies={hollywood} loading={loadingH} error={errorH} />
+        <Section title="Latest Bollywood Hits" emoji="🎭"
+          movies={bollywood} loading={loadingB} error={errorB} />
+        <Section title="Top Action & Thriller" emoji="💥"
+          movies={action} loading={loadingA} error={errorA} />
+      </Container>
+
+      {/* Footer */}
+      <Box sx={{
+        background: 'linear-gradient(90deg, #0a0a0a, #1a0000, #0a0a0a)',
+        py: 5, textAlign: 'center',
+        borderTop: '1px solid #2a0000',
+      }}>
+        <Typography variant="h6" sx={{
+          fontWeight: 900, letterSpacing: 3, mb: 1,
+          background: 'linear-gradient(90deg, #e50914, #ff6b6b)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+        }}>
+          CINESEARCH
+        </Typography>
+        <Typography color="#444" variant="body2">
+          © 2024 CineSearch • Built with ❤️ using React & Material UI
+        </Typography>
+        <Typography color="#333" variant="caption">
+          Powered by OMDb API
+        </Typography>
+      </Box>
+    </Box>
+  );
+};
+
+export default HomePage;
+```
+
+---
+
+Save both files → `Ctrl+S` → browser auto refreshes!
+
+## What's Fixed 🎨
+| Fix | Detail |
+|---|---|
+| ✅ Navbar | Gradient, active link highlight, mobile drawer |
+| ✅ Hero alignment | Centered, full height, glow effects |
+| ✅ Genre filters | Emoji labels + correct search queries |
+| ✅ Bollywood | Searches `hindi 2024` for latest hits |
+| ✅ Action | Searches `action thriller 2023` |
+| ✅ Hollywood | Searches `superhero 2023` |
+
+Share screenshot! 🚀
