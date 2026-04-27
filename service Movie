@@ -1,0 +1,51 @@
+import axios from 'axios';
+
+const API_KEY = process.env.REACT_APP_OMDB_API_KEY;
+
+const apiClient = axios.create({
+  baseURL: 'https://www.omdbapi.com',
+});
+
+// Search movies by title
+export const searchMovies = async (query) => {
+  try {
+    const response = await apiClient.get('/', {
+      params: {
+        apikey: API_KEY,
+        s: query,
+        type: 'movie',
+      },
+    });
+
+    if (response.data.Response === 'False') {
+      throw new Error(response.data.Error || 'No movies found');
+    }
+
+    return response.data.Search;
+  } catch (error) {
+    console.error('Search error:', error);
+    throw error;
+  }
+};
+
+// Get movie details by IMDb ID
+export const getMovieById = async (id) => {
+  try {
+    const response = await apiClient.get('/', {
+      params: {
+        apikey: API_KEY,
+        i: id,
+        plot: 'full',
+      },
+    });
+
+    if (response.data.Response === 'False') {
+      throw new Error(response.data.Error || 'Movie not found');
+    }
+
+    return response.data;
+  } catch (error) {
+    console.error('Detail error:', error);
+    throw error;
+  }
+};
