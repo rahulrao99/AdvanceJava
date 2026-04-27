@@ -1,0 +1,414 @@
+Great idea! OMDb doesn't have a "trending" endpoint, but we can show **hand-picked latest hit movies** as "Trending Now" using their IMDb IDs directly — this guarantees good posters and real data!
+
+---
+
+## ✅ Fix 1: Update `src/services/movieService.js`
+
+Add this new function at the bottom:
+
+```javascript
+// Get multiple movies by ID for trending section
+export const getTrendingMovies = async () => {
+  // Hand picked latest blockbuster IMDb IDs
+  const trendingIds = [
+    'tt1517268', // Barbie (2023)
+    'tt15398776', // Oppenheimer (2023)
+    'tt9362722', // Spider-Man: Across the Spider-Verse (2023)
+    'tt6791350', // Guardians of the Galaxy Vol. 3 (2023)
+    'tt13238346', // Pathaan (2023)
+    'tt12037194', // Jawan (2023)
+    'tt14539740', // Animal (2023)
+    'tt17279496', // Dunki (2023)
+    'tt8760708',  // John Wick 4 (2023)
+    'tt9603212',  // Mission Impossible Dead Reckoning (2023)
+    'tt14230388', // Aquaman 2 (2023)
+    'tt11304740', // The Flash (2023)
+  ];
+
+  const promises = trendingIds.map((id) => getMovieById(id));
+  const results = await Promise.allSettled(promises);
+
+  return results
+    .filter((r) => r.status === 'fulfilled')
+    .map((r) => r.value);
+};
+```
+
+---
+
+## ✅ Fix 2: Replace ENTIRE `src/pages/HomePage.jsx`
+
+```jsx
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Container, Typography, Box, Grid,
+  Divider, IconButton
+} from '@mui/material';
+import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
+import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
+import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
+import SearchBar from '../components/SearchBar';
+import MovieCard from '../components/MovieCard';
+import Loading from '../components/Loading';
+import ErrorMessage from '../components/ErrorMessage';
+import { searchMovies, getTrendingMovies } from '../services/movieService';
+import { useNavigate } from 'react-router-dom';
+
+// Horizontal scroll section for Trending
+const TrendingSection = ({ movies, loading, error }) => {
+  const scrollRef = useRef(null);
+
+  const scroll = (dir) => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollBy({ left: dir === 'left' ? -300 : 300, behavior: 'smooth' });
+    }
+  };
+
+  return (
+    <Box mb={6}>
+      {/* Section Header */}
+      <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
+        <Box display="flex" alignItems="center" gap={1}>
+          <LocalFireDepartmentIcon sx={{ color: '#e50914', fontSize: 30 }} />
+          <Typography variant="h5" color="#fff" fontWeight={700}>
+            Trending Now
+          </Typography>
+          <Box sx={{
+            ml: 1, px: 1.5, py: 0.3,
+            backgroundColor: '#e50914',
+            borderRadius: 5,
+            animation: 'pulse 1.5s infinite',
+            '@keyframes pulse': {
+              '0%': { opacity: 1 },
+              '50%': { opacity: 0.5 },
+              '100%': { opacity: 1 },
+            }
+          }}>
+            <Typography variant="caption" color="#fff" fontWeight={700}>LIVE</Typography>
+          </Box>
+        </Box>
+
+        {/* Scroll Arrows */}
+        <Box display="flex" gap={1}>
+          <IconButton onClick={() => scroll('left')} sx={{
+            backgroundColor: '#2a2a2a', color: '#fff',
+            '&:hover': { backgroundColor: '#e50914' }
+          }}>
+            <ArrowBackIosNewIcon fontSize="small" />
+          </IconButton>
+          <IconButton onClick={() => scroll('right')} sx={{
+            backgroundColor: '#2a2a2a', color: '#fff',
+            '&:hover': { backgroundColor: '#e50914' }
+          }}>
+            <ArrowForwardIosIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      </Box>
+
+      {loading && <Loading />}
+      {error && <ErrorMessage message={error} />}
+
+      {!loading && !error && (
+        <Box ref={scrollRef} sx={{
+          display: 'flex', gap: 2, overflowX: 'auto', pb: 2,
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#e50914 #1a1a1a',
+          '&::-webkit-scrollbar': { height: 6 },
+          '&::-webkit-scrollbar-track': { backgroundColor: '#1a1a1a' },
+          '&::-webkit-scrollbar-thumb': { backgroundColor: '#e50914', borderRadius: 3 },
+        }}>
+          {movies.map((movie, index) => (
+            <Box key={movie.imdbID} sx={{ minWidth: 200, position: 'relative', flexShrink: 0 }}>
+              {/* Rank Number */}
+              <Box sx={{
+                position: 'absolute', top: 8, left: 8, zIndex: 2,
+                backgroundColor: '#e50914', borderRadius: '50%',
+                width: 32, height: 32, display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Typography variant="caption" color="#fff" fontWeight={900}>
+                  #{index + 1}
+                </Typography>
+              </Box>
+              <MovieCard movie={movie} />
+            </Box>
+          ))}
+        </Box>
+      )}
+    </Box>
+  );
+};
+
+// Normal Grid Section
+const Section = ({ title, emoji, movies, loading, error }) => (
+  <Box mb={6}>
+    <Box display="flex" alignItems="center" gap={1} mb={3}>
+      <Typography variant="h5" color="#fff" fontWeight={700}>
+        {emoji} {title}
+      </Typography>
+      <Divider sx={{ flex: 1, borderColor: '#e50914', ml: 2 }} />
+    </Box>
+    {loading && <Loading />}
+    {error && <ErrorMessage message={error} />}
+    {!loading && !error && (
+      <Grid container spacing={3}>
+        {movies.map((movie) => (
+          <Grid item xs={12} sm={6} md={4} lg={3} key={movie.imdbID}>
+            <MovieCard movie={movie} />
+          </Grid>
+        ))}
+      </Grid>
+    )}
+  </Box>
+);
+
+const genres = [
+  { label: '💥 Action', query: 'action 2023' },
+  { label: '😂 Comedy', query: 'comedy 2024' },
+  { label: '💕 Romance', query: 'romance 2023' },
+  { label: '👻 Horror', query: 'horror 2023' },
+  { label: '🚀 Sci-Fi', query: 'sci-fi 2023' },
+  { label: '🎭 Thriller', query: 'thriller 2023' },
+  { label: '🎪 Bollywood', query: 'pathaan' },
+  { label: '🦸 Marvel', query: 'marvel' },
+];
+
+const HomePage = () => {
+  const navigate = useNavigate();
+
+  const [trending, setTrending] = useState([]);
+  const [hollywood, setHollywood] = useState([]);
+  const [bollywood, setBollywood] = useState([]);
+  const [action, setAction] = useState([]);
+
+  const [loadingT, setLoadingT] = useState(true);
+  const [loadingH, setLoadingH] = useState(true);
+  const [loadingB, setLoadingB] = useState(true);
+  const [loadingA, setLoadingA] = useState(true);
+
+  const [errorT, setErrorT] = useState('');
+  const [errorH, setErrorH] = useState('');
+  const [errorB, setErrorB] = useState('');
+  const [errorA, setErrorA] = useState('');
+
+  useEffect(() => {
+    // Trending
+    const fetchTrending = async () => {
+      try {
+        setLoadingT(true);
+        const data = await getTrendingMovies();
+        setTrending(data);
+      } catch (err) {
+        setErrorT('Failed to load trending movies.');
+      } finally {
+        setLoadingT(false);
+      }
+    };
+
+    // Hollywood
+    const fetchHollywood = async () => {
+      try {
+        setLoadingH(true);
+        const data = await searchMovies('avengers');
+        setHollywood(data);
+      } catch (err) {
+        setErrorH('Failed to load Hollywood movies.');
+      } finally {
+        setLoadingH(false);
+      }
+    };
+
+    // Bollywood
+    const fetchBollywood = async () => {
+      try {
+        setLoadingB(true);
+        const data = await searchMovies('shah rukh khan');
+        setBollywood(data);
+      } catch (err) {
+        setErrorB('Failed to load Bollywood movies.');
+      } finally {
+        setLoadingB(false);
+      }
+    };
+
+    // Action
+    const fetchAction = async () => {
+      try {
+        setLoadingA(true);
+        const data = await searchMovies('john wick');
+        setAction(data);
+      } catch (err) {
+        setErrorA('Failed to load Action movies.');
+      } finally {
+        setLoadingA(false);
+      }
+    };
+
+    fetchTrending();
+    fetchHollywood();
+    fetchBollywood();
+    fetchAction();
+  }, []);
+
+  return (
+    <Box sx={{ backgroundColor: '#141414', minHeight: '100vh' }}>
+
+      {/* Hero Section */}
+      <Box sx={{
+        minHeight: '80vh',
+        background: 'radial-gradient(ellipse at top, #4a0000 0%, #1a0000 40%, #141414 100%)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        px: 2, py: 6,
+        textAlign: 'center',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        <Box sx={{
+          position: 'absolute', width: 500, height: 500,
+          borderRadius: '50%', top: -150, left: -150,
+          background: 'radial-gradient(circle, rgba(229,9,20,0.15) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
+        <Box sx={{
+          position: 'absolute', width: 400, height: 400,
+          borderRadius: '50%', bottom: -100, right: -100,
+          background: 'radial-gradient(circle, rgba(229,9,20,0.1) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
+
+        <Box position="relative" zIndex={1} width="100%" maxWidth={700}>
+          <Typography variant="h2" color="#fff" fontWeight={900}
+            sx={{
+              textShadow: '0 4px 30px rgba(229,9,20,0.5)',
+              mb: 1,
+              fontSize: { xs: '2.5rem', md: '3.5rem' }
+            }}>
+            🎬 CineSearch
+          </Typography>
+          <Typography variant="h6"
+            sx={{ color: 'rgba(255,255,255,0.6)', mb: 4, fontWeight: 300 }}>
+            Discover Hollywood & Bollywood's finest — all in one place
+          </Typography>
+
+          <SearchBar />
+
+          {/* Stats */}
+          <Box display="flex" justifyContent="center"
+            gap={{ xs: 3, md: 6 }} mt={5} flexWrap="wrap">
+            {[
+              { label: 'Movies', value: '500K+' },
+              { label: 'Languages', value: '50+' },
+              { label: 'Genres', value: '30+' },
+            ].map((stat) => (
+              <Box key={stat.label} textAlign="center">
+                <Typography variant="h4" color="#e50914" fontWeight={900}>
+                  {stat.value}
+                </Typography>
+                <Typography color="rgba(255,255,255,0.5)" variant="body2" letterSpacing={1}>
+                  {stat.label}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Genre Filter Bar */}
+      <Box sx={{
+        background: 'linear-gradient(90deg, #0a0a0a, #1f0000, #0a0a0a)',
+        py: 2.5,
+        borderTop: '1px solid #2a0000',
+        borderBottom: '1px solid #2a0000',
+      }}>
+        <Container maxWidth="lg">
+          <Box display="flex" gap={1.5} flexWrap="wrap" justifyContent="center">
+            {genres.map((genre) => (
+              <Box key={genre.label}
+                onClick={() => navigate(`/search?q=${encodeURIComponent(genre.query)}`)}
+                sx={{
+                  px: 2.5, py: 0.8, borderRadius: 5,
+                  border: '1px solid rgba(229,9,20,0.4)',
+                  color: '#ccc', cursor: 'pointer',
+                  fontSize: '0.85rem', fontWeight: 500,
+                  transition: 'all 0.25s',
+                  '&:hover': {
+                    backgroundColor: '#e50914',
+                    color: '#fff',
+                    border: '1px solid #e50914',
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 4px 15px rgba(229,9,20,0.4)',
+                  }
+                }}>
+                {genre.label}
+              </Box>
+            ))}
+          </Box>
+        </Container>
+      </Box>
+
+      {/* All Sections */}
+      <Container maxWidth="lg" sx={{ py: 6 }}>
+
+        {/* 🔥 Trending — Horizontal Scroll */}
+        <TrendingSection
+          movies={trending}
+          loading={loadingT}
+          error={errorT}
+        />
+
+        {/* Grid Sections */}
+        <Section title="Hollywood Blockbusters" emoji="🌟"
+          movies={hollywood} loading={loadingH} error={errorH} />
+        <Section title="Latest Bollywood Hits" emoji="🎭"
+          movies={bollywood} loading={loadingB} error={errorB} />
+        <Section title="Top Action & Thriller" emoji="💥"
+          movies={action} loading={loadingA} error={errorA} />
+
+      </Container>
+
+      {/* Footer */}
+      <Box sx={{
+        background: 'linear-gradient(90deg, #0a0a0a, #1a0000, #0a0a0a)',
+        py: 5, textAlign: 'center',
+        borderTop: '1px solid #2a0000',
+      }}>
+        <Typography variant="h6" sx={{
+          fontWeight: 900, letterSpacing: 3, mb: 1,
+          background: 'linear-gradient(90deg, #e50914, #ff6b6b)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+        }}>
+          CINESEARCH
+        </Typography>
+        <Typography color="#444" variant="body2">
+          © 2024 CineSearch • Built with ❤️ using React & Material UI
+        </Typography>
+        <Typography color="#333" variant="caption">
+          Powered by OMDb API
+        </Typography>
+      </Box>
+    </Box>
+  );
+};
+
+export default HomePage;
+```
+
+---
+
+Save both files → `Ctrl+S`!
+
+## 🎯 What's New
+| Feature | Detail |
+|---|---|
+| 🔥 Trending Section | Horizontal scroll with rank numbers |
+| #️⃣ Rank badges | #1 #2 #3... on each card |
+| 🔴 LIVE badge | Pulsing animation |
+| ◀️▶️ Scroll arrows | Click to scroll left/right |
+| 🎨 Custom scrollbar | Red themed scrollbar |
+| 🎬 12 hand-picked movies | Barbie, Oppenheimer, Pathaan, Jawan, Animal etc |
+
+Share screenshot! 🚀
