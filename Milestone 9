@@ -1,0 +1,363 @@
+# 🚀 Milestone 9 — Unit Testing!
+
+Let's write all tests. Create these files inside `src/tests/` folder.
+
+---
+
+## 📁 File 1: `src/tests/SearchBar.test.js`
+
+```javascript
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import SearchBar from '../components/SearchBar';
+
+// Mock useNavigate
+const mockNavigate = jest.fn();
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+}));
+
+describe('SearchBar Component', () => {
+
+  beforeEach(() => {
+    mockNavigate.mockClear();
+  });
+
+  test('renders search input and button', () => {
+    render(<MemoryRouter><SearchBar /></MemoryRouter>);
+    expect(screen.getByPlaceholderText('Search for movies...')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /search/i })).toBeInTheDocument();
+  });
+
+  test('updates input value when user types', () => {
+    render(<MemoryRouter><SearchBar /></MemoryRouter>);
+    const input = screen.getByPlaceholderText('Search for movies...');
+    fireEvent.change(input, { target: { value: 'Batman' } });
+    expect(input.value).toBe('Batman');
+  });
+
+  test('navigates to search page on button click', () => {
+    render(<MemoryRouter><SearchBar /></MemoryRouter>);
+    const input = screen.getByPlaceholderText('Search for movies...');
+    fireEvent.change(input, { target: { value: 'Batman' } });
+    fireEvent.click(screen.getByRole('button', { name: /search/i }));
+    expect(mockNavigate).toHaveBeenCalledWith('/search?q=Batman');
+  });
+
+  test('navigates on Enter key press', () => {
+    render(<MemoryRouter><SearchBar /></MemoryRouter>);
+    const input = screen.getByPlaceholderText('Search for movies...');
+    fireEvent.change(input, { target: { value: 'Avengers' } });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    expect(mockNavigate).toHaveBeenCalledWith('/search?q=Avengers');
+  });
+
+  test('does not navigate when input is empty', () => {
+    render(<MemoryRouter><SearchBar /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: /search/i }));
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  test('renders with initial query value', () => {
+    render(<MemoryRouter><SearchBar initialQuery="Spiderman" /></MemoryRouter>);
+    const input = screen.getByPlaceholderText('Search for movies...');
+    expect(input.value).toBe('Spiderman');
+  });
+
+});
+```
+
+---
+
+## 📁 File 2: `src/tests/MovieCard.test.js`
+
+```javascript
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import MovieCard from '../components/MovieCard';
+
+const mockNavigate = jest.fn();
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+}));
+
+const mockMovie = {
+  imdbID: 'tt0372784',
+  Title: 'Batman Begins',
+  Year: '2005',
+  Poster: 'https://example.com/batman.jpg',
+  imdbRating: '8.2',
+};
+
+const mockMovieNoPoster = {
+  imdbID: 'tt9999999',
+  Title: 'No Poster Movie',
+  Year: '2023',
+  Poster: 'N/A',
+  imdbRating: 'N/A',
+};
+
+describe('MovieCard Component', () => {
+
+  beforeEach(() => {
+    mockNavigate.mockClear();
+  });
+
+  test('renders movie title and year', () => {
+    render(<MemoryRouter><MovieCard movie={mockMovie} /></MemoryRouter>);
+    expect(screen.getByText('Batman Begins')).toBeInTheDocument();
+    expect(screen.getByText('2005')).toBeInTheDocument();
+  });
+
+  test('renders movie poster image', () => {
+    render(<MemoryRouter><MovieCard movie={mockMovie} /></MemoryRouter>);
+    const img = screen.getByAltText('Batman Begins');
+    expect(img).toBeInTheDocument();
+    expect(img).toHaveAttribute('src', mockMovie.Poster);
+  });
+
+  test('shows No Poster fallback when poster is N/A', () => {
+    render(<MemoryRouter><MovieCard movie={mockMovieNoPoster} /></MemoryRouter>);
+    expect(screen.getByText('No Poster Available')).toBeInTheDocument();
+  });
+
+  test('navigates to movie detail page on click', () => {
+    render(<MemoryRouter><MovieCard movie={mockMovie} /></MemoryRouter>);
+    fireEvent.click(screen.getByText('Batman Begins'));
+    expect(mockNavigate).toHaveBeenCalledWith('/movie/tt0372784');
+  });
+
+  test('renders imdb rating', () => {
+    render(<MemoryRouter><MovieCard movie={mockMovie} /></MemoryRouter>);
+    expect(screen.getByText('8.2')).toBeInTheDocument();
+  });
+
+  test('renders N/A when rating not available', () => {
+    render(<MemoryRouter><MovieCard movie={mockMovieNoPoster} /></MemoryRouter>);
+    expect(screen.getByText('N/A')).toBeInTheDocument();
+  });
+
+});
+```
+
+---
+
+## 📁 File 3: `src/tests/Loading.test.js`
+
+```javascript
+import React from 'react';
+import { render, screen } from '@testing-library/react';
+import Loading from '../components/Loading';
+
+describe('Loading Component', () => {
+
+  test('renders loading text', () => {
+    render(<Loading />);
+    expect(screen.getByText('Loading movies...')).toBeInTheDocument();
+  });
+
+  test('renders circular progress spinner', () => {
+    render(<Loading />);
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+  });
+
+});
+```
+
+---
+
+## 📁 File 4: `src/tests/ErrorMessage.test.js`
+
+```javascript
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import ErrorMessage from '../components/ErrorMessage';
+
+const mockNavigate = jest.fn();
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+}));
+
+describe('ErrorMessage Component', () => {
+
+  beforeEach(() => {
+    mockNavigate.mockClear();
+  });
+
+  test('renders default error message', () => {
+    render(<MemoryRouter><ErrorMessage /></MemoryRouter>);
+    expect(screen.getByText('Something went wrong!')).toBeInTheDocument();
+  });
+
+  test('renders custom error message', () => {
+    render(<MemoryRouter><ErrorMessage message="Failed to load movies." /></MemoryRouter>);
+    expect(screen.getByText('Failed to load movies.')).toBeInTheDocument();
+  });
+
+  test('renders Go Home button', () => {
+    render(<MemoryRouter><ErrorMessage /></MemoryRouter>);
+    expect(screen.getByRole('button', { name: /go home/i })).toBeInTheDocument();
+  });
+
+  test('navigates to home on Go Home click', () => {
+    render(<MemoryRouter><ErrorMessage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: /go home/i }));
+    expect(mockNavigate).toHaveBeenCalledWith('/');
+  });
+
+});
+```
+
+---
+
+## 📁 File 5: `src/tests/movieService.test.js`
+
+```javascript
+import axios from 'axios';
+import { searchMovies, getMovieById } from '../services/movieService';
+
+jest.mock('axios');
+
+const mockSearchResponse = {
+  data: {
+    Response: 'True',
+    Search: [
+      { imdbID: 'tt0372784', Title: 'Batman Begins', Year: '2005', Poster: 'N/A' },
+    ],
+  },
+};
+
+const mockDetailResponse = {
+  data: {
+    Response: 'True',
+    imdbID: 'tt0372784',
+    Title: 'Batman Begins',
+    Year: '2005',
+    Plot: 'A great movie',
+    imdbRating: '8.2',
+  },
+};
+
+describe('movieService', () => {
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('searchMovies returns movie list on success', async () => {
+    axios.create.mockReturnValue({
+      get: jest.fn().mockResolvedValue(mockSearchResponse),
+    });
+    const movies = await searchMovies('batman');
+    expect(movies).toHaveLength(1);
+    expect(movies[0].Title).toBe('Batman Begins');
+  });
+
+  test('searchMovies throws error when Response is False', async () => {
+    axios.create.mockReturnValue({
+      get: jest.fn().mockResolvedValue({
+        data: { Response: 'False', Error: 'Movie not found!' },
+      }),
+    });
+    await expect(searchMovies('xyzxyz')).rejects.toThrow('Movie not found!');
+  });
+
+  test('getMovieById returns movie details on success', async () => {
+    axios.create.mockReturnValue({
+      get: jest.fn().mockResolvedValue(mockDetailResponse),
+    });
+    const movie = await getMovieById('tt0372784');
+    expect(movie.Title).toBe('Batman Begins');
+    expect(movie.imdbRating).toBe('8.2');
+  });
+
+  test('getMovieById throws error when Response is False', async () => {
+    axios.create.mockReturnValue({
+      get: jest.fn().mockResolvedValue({
+        data: { Response: 'False', Error: 'Movie not found!' },
+      }),
+    });
+    await expect(getMovieById('invalid')).rejects.toThrow('Movie not found!');
+  });
+
+});
+```
+
+---
+
+## 📁 File 6: `src/tests/NotFoundPage.test.js`
+
+```javascript
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import NotFoundPage from '../pages/NotFoundPage';
+
+const mockNavigate = jest.fn();
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+}));
+
+describe('NotFoundPage', () => {
+
+  beforeEach(() => {
+    mockNavigate.mockClear();
+  });
+
+  test('renders 404 text', () => {
+    render(<MemoryRouter><NotFoundPage /></MemoryRouter>);
+    expect(screen.getByText('404')).toBeInTheDocument();
+  });
+
+  test('renders page not found message', () => {
+    render(<MemoryRouter><NotFoundPage /></MemoryRouter>);
+    expect(screen.getByText('Oops! Page not found')).toBeInTheDocument();
+  });
+
+  test('renders back to home button', () => {
+    render(<MemoryRouter><NotFoundPage /></MemoryRouter>);
+    expect(screen.getByRole('button', { name: /back to home/i })).toBeInTheDocument();
+  });
+
+  test('navigates to home on button click', () => {
+    render(<MemoryRouter><NotFoundPage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: /back to home/i }));
+    expect(mockNavigate).toHaveBeenCalledWith('/');
+  });
+
+});
+```
+
+---
+
+## ✅ Now Run All Tests!
+
+```bash
+npm test -- --watchAll=false
+```
+
+---
+
+## ✅ Milestone 9 Checklist
+
+| Test File | Tests |
+|---|---|
+| `SearchBar.test.js` | Input, navigation, Enter key, empty check |
+| `MovieCard.test.js` | Render, poster, no poster, click, rating |
+| `Loading.test.js` | Spinner, text |
+| `ErrorMessage.test.js` | Default/custom message, navigation |
+| `movieService.test.js` | API success, API error |
+| `NotFoundPage.test.js` | 404 text, button, navigation |
+
+---
+
+Create all 6 files → paste → save → run `npm test -- --watchAll=false`
+
+Share screenshot of test results! 🚀
