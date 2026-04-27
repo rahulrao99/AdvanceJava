@@ -1,0 +1,228 @@
+Great idea! Let me upgrade the HomePage with beautiful UI + Bollywood movies section!
+
+---
+
+## 📁 Replace ENTIRE `src/pages/HomePage.jsx`
+
+Delete everything and paste this:
+
+```jsx
+import React, { useState, useEffect } from 'react';
+import {
+  Container, Typography, Box, Grid, Divider
+} from '@mui/material';
+import SearchBar from '../components/SearchBar';
+import MovieCard from '../components/MovieCard';
+import Loading from '../components/Loading';
+import ErrorMessage from '../components/ErrorMessage';
+import { searchMovies } from '../services/movieService';
+
+const Section = ({ title, emoji, movies, loading, error }) => (
+  <Box mb={6}>
+    <Box display="flex" alignItems="center" gap={1} mb={3}>
+      <Typography variant="h5" color="#fff" fontWeight={700}>
+        {emoji} {title}
+      </Typography>
+      <Divider sx={{ flex: 1, borderColor: '#e50914', ml: 2 }} />
+    </Box>
+    {loading && <Loading />}
+    {error && <ErrorMessage message={error} />}
+    {!loading && !error && (
+      <Grid container spacing={3}>
+        {movies.map((movie) => (
+          <Grid item xs={12} sm={6} md={4} lg={3} key={movie.imdbID}>
+            <MovieCard movie={movie} />
+          </Grid>
+        ))}
+      </Grid>
+    )}
+  </Box>
+);
+
+const HomePage = () => {
+  const [hollywood, setHollywood] = useState([]);
+  const [bollywood, setBollywood] = useState([]);
+  const [action, setAction] = useState([]);
+  const [loadingH, setLoadingH] = useState(true);
+  const [loadingB, setLoadingB] = useState(true);
+  const [loadingA, setLoadingA] = useState(true);
+  const [errorH, setErrorH] = useState('');
+  const [errorB, setErrorB] = useState('');
+  const [errorA, setErrorA] = useState('');
+
+  useEffect(() => {
+    // Hollywood Popular
+    const fetchHollywood = async () => {
+      try {
+        setLoadingH(true);
+        const data = await searchMovies('avengers');
+        setHollywood(data);
+      } catch (err) {
+        setErrorH('Failed to load Hollywood movies.');
+      } finally {
+        setLoadingH(false);
+      }
+    };
+
+    // Latest Bollywood
+    const fetchBollywood = async () => {
+      try {
+        setLoadingB(true);
+        const data = await searchMovies('bollywood 2024');
+        setBollywood(data);
+      } catch (err) {
+        setErrorB('Failed to load Bollywood movies.');
+      } finally {
+        setLoadingB(false);
+      }
+    };
+
+    // Action Movies
+    const fetchAction = async () => {
+      try {
+        setLoadingA(true);
+        const data = await searchMovies('action 2023');
+        setAction(data);
+      } catch (err) {
+        setErrorA('Failed to load Action movies.');
+      } finally {
+        setLoadingA(false);
+      }
+    };
+
+    fetchHollywood();
+    fetchBollywood();
+    fetchAction();
+  }, []);
+
+  return (
+    <Box sx={{ backgroundColor: '#141414', minHeight: '100vh' }}>
+
+      {/* Hero Banner */}
+      <Box sx={{
+        background: 'linear-gradient(135deg, #1a0000 0%, #e50914 50%, #1a0000 100%)',
+        py: 8,
+        px: 2,
+        textAlign: 'center',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        <Box sx={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'radial-gradient(ellipse at center, rgba(229,9,20,0.3) 0%, rgba(20,20,20,0.9) 70%)',
+        }} />
+        <Box position="relative" zIndex={1}>
+          <Typography variant="h2" color="#fff" fontWeight={900} letterSpacing={2}
+            sx={{ textShadow: '0 4px 20px rgba(229,9,20,0.8)', mb: 1 }}>
+            🎬 CineSearch
+          </Typography>
+          <Typography variant="h6" color="rgba(255,255,255,0.7)" mb={4}>
+            Discover millions of movies from Hollywood to Bollywood
+          </Typography>
+          <Box display="flex" justifyContent="center">
+            <Box sx={{ width: '100%', maxWidth: 650 }}>
+              <SearchBar />
+            </Box>
+          </Box>
+
+          {/* Stats Row */}
+          <Box display="flex" justifyContent="center" gap={6} mt={4} flexWrap="wrap">
+            {[
+              { label: 'Movies', value: '500K+' },
+              { label: 'Languages', value: '50+' },
+              { label: 'Genres', value: '30+' },
+            ].map((stat) => (
+              <Box key={stat.label} textAlign="center">
+                <Typography variant="h5" color="#e50914" fontWeight={900}>{stat.value}</Typography>
+                <Typography color="rgba(255,255,255,0.6)" variant="body2">{stat.label}</Typography>
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Genre Quick Filters */}
+      <Box sx={{ backgroundColor: '#1a1a1a', py: 2, px: 2 }}>
+        <Container maxWidth="lg">
+          <Box display="flex" gap={2} flexWrap="wrap" justifyContent="center">
+            {['Action', 'Comedy', 'Drama', 'Horror', 'Romance', 'Thriller', 'Sci-Fi', 'Bollywood'].map((genre) => (
+              <Box key={genre}
+                onClick={() => window.location.href = `/search?q=${genre}`}
+                sx={{
+                  px: 2.5, py: 0.8,
+                  borderRadius: 5,
+                  border: '1px solid #e50914',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  transition: 'all 0.2s',
+                  '&:hover': {
+                    backgroundColor: '#e50914',
+                    transform: 'scale(1.05)',
+                  }
+                }}>
+                {genre}
+              </Box>
+            ))}
+          </Box>
+        </Container>
+      </Box>
+
+      {/* Movie Sections */}
+      <Container maxWidth="lg" sx={{ py: 5 }}>
+        <Section
+          title="Hollywood Blockbusters"
+          emoji="🌟"
+          movies={hollywood}
+          loading={loadingH}
+          error={errorH}
+        />
+        <Section
+          title="Latest Bollywood"
+          emoji="🎭"
+          movies={bollywood}
+          loading={loadingB}
+          error={errorB}
+        />
+        <Section
+          title="Top Action Movies"
+          emoji="💥"
+          movies={action}
+          loading={loadingA}
+          error={errorA}
+        />
+      </Container>
+
+      {/* Footer */}
+      <Box sx={{ backgroundColor: '#0a0a0a', py: 4, textAlign: 'center', borderTop: '1px solid #222' }}>
+        <Typography color="#555" variant="body2">
+          © 2024 CineSearch • Built with ❤️ using React & MUI
+        </Typography>
+        <Typography color="#333" variant="caption">
+          Powered by OMDb API
+        </Typography>
+      </Box>
+
+    </Box>
+  );
+};
+
+export default HomePage;
+```
+
+---
+
+Save with `Ctrl+S` → browser will auto refresh!
+
+## What's New 🎨
+| Feature | Detail |
+|---|---|
+| 🎬 Hero Banner | Gradient background with glow effect |
+| 📊 Stats Row | 500K+ movies, 50+ languages, 30+ genres |
+| 🎭 Genre Filter Bar | Quick click filters for Action, Bollywood etc |
+| 🌟 Hollywood Section | Avengers & blockbusters |
+| 🎭 Bollywood Section | Latest 2024 Bollywood movies |
+| 💥 Action Section | Top action movies |
+| 🔻 Footer | Clean branded footer |
+
+Share a screenshot when done! 🚀
