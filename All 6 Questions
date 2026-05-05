@@ -1,0 +1,1436 @@
+import java.util.*;
+
+// ╔══════════════════════════════════════════════════════════════════╗
+//  QUESTION 1 — FOOD DELIVERY PLATFORM
+//  HOW TO RUN: Paste into https://onlinegdb.com/online_java_compiler
+//  Select Java → click Run
+// ╚══════════════════════════════════════════════════════════════════╝
+
+/*
+ ┌─────────────────────────────────────────────────────────────────┐
+  PROBLEM STATEMENT
+
+  TASK 1 (Bug Fix): getOrderStatistics()
+    Active  = PLACED | PREPARING | OUT_FOR_DELIVERY
+    Closed  = DELIVERED | CANCELED
+    BUG: closed counter never incremented — else block was missing.
+    FIX: Add else block so anything not active is counted as closed.
+
+  TASK 2: getRevenuePerRestaurant()
+    Return {restaurantId → total revenue}.
+    Only DELIVERED orders count. CANCELED/active orders excluded.
+
+  TASK 3: getAverageDeliveryDistancePerCustomer()
+    Return {customerId → average delivery distance in km}.
+    Only DELIVERED orders. Customers with 0 deliveries not in result.
+
+  TASK 4: getHighlyActiveCustomers()
+    Return sorted list of customer IDs with 3+ orders (any status).
+ └─────────────────────────────────────────────────────────────────┘
+*/
+
+// ══════════════════════════════════════════════════════════════════
+//  SUPPORTING CLASSES
+// ══════════════════════════════════════════════════════════════════
+
+// Enum: defines every possible state an order can be in
+enum OrderStatus {
+    PLACED,            // customer just placed the order  → ACTIVE
+    PREPARING,         // restaurant is cooking           → ACTIVE
+    OUT_FOR_DELIVERY,  // delivery agent picked it up     → ACTIVE
+    DELIVERED,         // customer received it            → CLOSED
+    CANCELED           // order was canceled              → CLOSED
+}
+
+// Order: holds all information about one single order (like a DB row)
+class Order {
+    int orderId;        // unique ID for this order
+    int restaurantId;   // which restaurant made it
+    int customerId;     // which customer placed it
+    double orderValue;  // money value of this order
+    double distanceKm;  // delivery distance in km
+    OrderStatus status; // current state of the order
+
+    // Constructor: stores all 6 values when we write "new Order(...)"
+    Order(int orderId, int restaurantId, int customerId,
+          double orderValue, double distanceKm, OrderStatus status) {
+        this.orderId      = orderId;
+        this.restaurantId = restaurantId;
+        this.customerId   = customerId;
+        this.orderValue   = orderValue;
+        this.distanceKm   = distanceKm;
+        this.status       = status;
+    }
+}
+
+// OrderStats: container to return 3 counts from Task 1 in one object
+class OrderStats {
+    int totalOrders, activeOrders, closedOrders;
+    OrderStats(int t, int a, int c) {
+        totalOrders = t; activeOrders = a; closedOrders = c;
+    }
+}
+
+// OrderManager: stores all orders and provides 4 query methods
+class OrderManager {
+    List<Order> orders = new ArrayList<>();
+
+    void addOrder(Order order) { orders.add(order); }
+
+    void updateOrderStatus(int orderId, OrderStatus newStatus) {
+        for (Order o : orders) {
+            if (o.orderId == orderId) { o.status = newStatus; return; }
+        }
+    }
+
+    // ── TASK 1 (Bug Fix): getOrderStatistics() ────────────────────
+    // BUG: no else block → closed always stayed 0
+    // FIX: else block added → anything not active = closed
+    OrderStats getOrderStatistics() {
+        int total = orders.size(); // total = count all orders
+        int active = 0, closed = 0;
+
+        for (Order o : orders) {
+            // Use == for enum comparison (not .equals())
+            if (o.status == OrderStatus.PLACED
+             || o.status == OrderStatus.PREPARING
+             || o.status == OrderStatus.OUT_FOR_DELIVERY) {
+                active++;
+            } else {
+                closed++; // FIX: catches DELIVERED + CANCELED
+            }
+        }
+        return new OrderStats(total, active, closed);
+    }
+
+    // ── TASK 2: getRevenuePerRestaurant() ─────────────────────────
+    // Only DELIVERED orders count. Uses getOrDefault to safely accumulate.
+    // getOrDefault(key, 0.0): returns existing value OR 0.0 if key not seen yet
+    Map<Integer, Double> getRevenuePerRestaurant() {
+        Map<Integer, Double> revenue = new HashMap<>();
+        for (Order o : orders) {
+            if (o.status == OrderStatus.DELIVERED) { // only DELIVERED orders count
+                revenue.put(o.restaurantId,
+                    revenue.getOrDefault(o.restaurantId, 0.0) + o.orderValue);
+            }
+        }
+        return revenue; // e.g. {10: 80.0, 11: 40.0}
+    }
+
+    // ── TASK 3: getAverageDeliveryDistancePerCustomer() ───────────
+    // Two maps (sum + count) → divide at end to get average
+    // Customers with no DELIVERED orders never enter sumMap → not in result
+    Map<Integer, Double> getAverageDeliveryDistancePerCustomer() {
+        Map<Integer, Double>  sumMap   = new HashMap<>(); // total km per customer
+        Map<Integer, Integer> countMap = new HashMap<>(); // count of deliveries per customer
+
+        for (Order o : orders) {
+            if (o.status == OrderStatus.DELIVERED) { // only DELIVERED
+                sumMap.put(o.customerId,
+                    sumMap.getOrDefault(o.customerId, 0.0) + o.distanceKm);
+                countMap.put(o.customerId,
+                    countMap.getOrDefault(o.customerId, 0) + 1);
+            }
+        }
+
+        Map<Integer, Double> result = new HashMap<>();
+        for (int id : sumMap.keySet()) {
+            result.put(id, sumMap.get(id) / countMap.get(id)); // avg = sum / count
+        }
+        return result;
+    }
+
+    // ── TASK 4: getHighlyActiveCustomers() ────────────────────────
+    // Count ALL orders per customer (no status filter), filter >= 3, sort
+    List<Integer> getHighlyActiveCustomers() {
+        Map<Integer, Integer> countMap = new HashMap<>();
+        for (Order o : orders) { // ALL statuses count — no filter
+            countMap.put(o.customerId,
+                countMap.getOrDefault(o.customerId, 0) + 1);
+        }
+
+        List<Integer> result = new ArrayList<>();
+        for (Map.Entry<Integer, Integer> entry : countMap.entrySet()) {
+            if (entry.getValue() >= 3) result.add(entry.getKey()); // threshold = 3
+        }
+        Collections.sort(result); // sort ascending
+        return result;
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  MAIN CLASS — runs all 4 tests
+// ══════════════════════════════════════════════════════════════════
+public class Q1_FoodDelivery {
+
+    public static void main(String[] args) {
+        testTask1_BugFix();
+        testTask2_Revenue();
+        testTask3_AvgDistance();
+        testTask4_ActiveCustomers();
+        System.out.println("\nAll 4 tasks PASSED!");
+    }
+
+    // ── Test Task 1 ────────────────────────────────────────────────
+    static void testTask1_BugFix() {
+        System.out.println("Task 1 (Bug Fix): getOrderStatistics...");
+        OrderManager om = new OrderManager();
+
+        // 3 active + 2 closed orders
+        om.addOrder(new Order(1, 10, 100, 25.0, 3.2, OrderStatus.PLACED));           // active
+        om.addOrder(new Order(2, 10, 101, 55.0, 1.4, OrderStatus.PREPARING));        // active
+        om.addOrder(new Order(3, 11, 102, 15.0, 6.0, OrderStatus.OUT_FOR_DELIVERY)); // active
+        om.addOrder(new Order(4, 11, 103, 40.0, 2.0, OrderStatus.DELIVERED));        // closed
+        om.addOrder(new Order(5, 12, 104, 18.0, 4.5, OrderStatus.CANCELED));         // closed
+
+        OrderStats s = om.getOrderStatistics();
+
+        assert s.totalOrders  == 5 : "total expected 5,  got " + s.totalOrders;
+        assert s.activeOrders == 3 : "active expected 3, got " + s.activeOrders;
+        assert s.closedOrders == 2 : "closed expected 2, got " + s.closedOrders;
+
+        System.out.println("  total=" + s.totalOrders
+            + "  active=" + s.activeOrders
+            + "  closed=" + s.closedOrders + "  PASS");
+    }
+
+    // ── Test Task 2 ────────────────────────────────────────────────
+    static void testTask2_Revenue() {
+        System.out.println("Task 2: getRevenuePerRestaurant...");
+        OrderManager om = new OrderManager();
+
+        // Restaurant 10: 25+55=80, Restaurant 11: 40 (CANCELED 20 ignored), Restaurant 12: PLACED (ignored)
+        om.addOrder(new Order(1, 10, 100, 25.0, 3.2, OrderStatus.DELIVERED));
+        om.addOrder(new Order(2, 10, 101, 55.0, 1.4, OrderStatus.DELIVERED));
+        om.addOrder(new Order(3, 11, 102, 40.0, 2.0, OrderStatus.DELIVERED));
+        om.addOrder(new Order(4, 11, 103, 20.0, 5.0, OrderStatus.CANCELED));  // excluded
+        om.addOrder(new Order(5, 12, 104, 18.0, 4.5, OrderStatus.PLACED));    // excluded
+
+        Map<Integer, Double> rev = om.getRevenuePerRestaurant();
+
+        assert Math.abs(rev.get(10) - 80.0) < 0.01 : "R10 expected 80.0";
+        assert Math.abs(rev.get(11) - 40.0) < 0.01 : "R11 expected 40.0";
+        assert !rev.containsKey(12) : "R12 should NOT appear";
+
+        System.out.println("  R10=" + rev.get(10)
+            + "  R11=" + rev.get(11)
+            + "  R12 absent=" + !rev.containsKey(12) + "  PASS");
+    }
+
+    // ── Test Task 3 ────────────────────────────────────────────────
+    static void testTask3_AvgDistance() {
+        System.out.println("Task 3: getAverageDeliveryDistancePerCustomer...");
+        OrderManager om = new OrderManager();
+
+        // Customer 100: (3.0+5.0)/2=4.0, Customer 101: 2.0/1=2.0, Customer 102: CANCELED → absent
+        om.addOrder(new Order(1, 10, 100, 25.0, 3.0, OrderStatus.DELIVERED));
+        om.addOrder(new Order(2, 10, 100, 30.0, 5.0, OrderStatus.DELIVERED));
+        om.addOrder(new Order(3, 11, 101, 15.0, 2.0, OrderStatus.DELIVERED));
+        om.addOrder(new Order(4, 11, 102, 40.0, 6.0, OrderStatus.CANCELED));
+
+        Map<Integer, Double> avg = om.getAverageDeliveryDistancePerCustomer();
+
+        assert Math.abs(avg.get(100) - 4.0) < 0.01 : "C100 expected 4.0";
+        assert Math.abs(avg.get(101) - 2.0) < 0.01 : "C101 expected 2.0";
+        assert !avg.containsKey(102) : "C102 should NOT appear";
+
+        System.out.println("  C100=" + avg.get(100)
+            + "  C101=" + avg.get(101)
+            + "  C102 absent=" + !avg.containsKey(102) + "  PASS");
+    }
+
+    // ── Test Task 4 ────────────────────────────────────────────────
+    static void testTask4_ActiveCustomers() {
+        System.out.println("Task 4: getHighlyActiveCustomers...");
+        OrderManager om = new OrderManager();
+
+        // Customer 100: 3 orders → qualifies. Customer 101: 4 → qualifies. Customer 102: 2 → doesn't
+        om.addOrder(new Order(1, 10, 100, 10.0, 1.0, OrderStatus.PLACED));
+        om.addOrder(new Order(2, 10, 100, 20.0, 2.0, OrderStatus.CANCELED));
+        om.addOrder(new Order(3, 10, 100, 30.0, 3.0, OrderStatus.DELIVERED));
+        om.addOrder(new Order(4, 11, 101, 10.0, 1.0, OrderStatus.DELIVERED));
+        om.addOrder(new Order(5, 11, 101, 10.0, 1.0, OrderStatus.DELIVERED));
+        om.addOrder(new Order(6, 11, 101, 10.0, 1.0, OrderStatus.PLACED));
+        om.addOrder(new Order(7, 11, 101, 10.0, 1.0, OrderStatus.PREPARING));
+        om.addOrder(new Order(8, 12, 102, 10.0, 1.0, OrderStatus.DELIVERED));
+        om.addOrder(new Order(9, 12, 102, 10.0, 1.0, OrderStatus.DELIVERED));
+
+        List<Integer> result = om.getHighlyActiveCustomers();
+
+        assert result.size() == 2    : "expected 2 customers";
+        assert result.contains(100)  : "100 should be in result";
+        assert result.contains(101)  : "101 should be in result";
+        assert !result.contains(102) : "102 should NOT be in result";
+        assert result.get(0) < result.get(1) : "should be sorted ascending";
+
+        System.out.println("  Highly active (sorted): " + result + "  PASS");
+    }
+}
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------------------
+
+
+
+
+
+import java.util.*;
+
+// ╔══════════════════════════════════════════════════════════════════╗
+//  QUESTION 2 — PAYMENT TRANSACTION MONITORING
+//  HOW TO RUN: Paste into https://onlinegdb.com/online_java_compiler
+//  Select Java → click Run
+// ╚══════════════════════════════════════════════════════════════════╝
+
+/*
+ ┌─────────────────────────────────────────────────────────────────┐
+  PROBLEM STATEMENT
+
+  TASK 1 (Bug Fix): getBalance(accountId)
+    BUG: No accountId filter — all accounts' transactions summed.
+    FIX: Add "if (tx.accountId == accountId)" filter inside loop.
+
+  TASK 2: getAverageTransactionAmountByAccount()
+    Return {accountId → average amount}. Both CREDIT and DEBIT count.
+    Accounts with 0 transactions must NOT appear in result.
+
+  TASK 3: getTransactionFees()
+    First 3 transactions FREE. 4th+ → CREDIT=$1, DEBIT=$2.
+    CRITICAL: Sort by timestamp first — input may be out of order!
+ └─────────────────────────────────────────────────────────────────┘
+*/
+
+// ══════════════════════════════════════════════════════════════════
+//  SUPPORTING CLASSES
+// ══════════════════════════════════════════════════════════════════
+
+// Enum: two types of transactions
+enum TransactionType {
+    CREDIT, // money comes IN  → balance increases
+    DEBIT   // money goes OUT  → balance decreases
+}
+
+// Transaction: one movement of money in or out of an account
+class Transaction {
+    int transactionId, accountId;
+    TransactionType type;
+    double amount;     // always positive
+    long timestampSec; // when it happened (unix seconds)
+
+    Transaction(int tid, int aid, TransactionType type, double amount, long ts) {
+        this.transactionId = tid; this.accountId = aid;
+        this.type = type; this.amount = amount; this.timestampSec = ts;
+    }
+    public int getAccountId()        { return accountId; }
+    public TransactionType getType() { return type; }
+    public double getAmount()        { return amount; }
+    public long getTimestampSec()    { return timestampSec; }
+}
+
+// AccountManager: manages all transactions and provides 3 query methods
+class AccountManager {
+    List<Transaction> transactions = new ArrayList<>();
+
+    void addTransaction(Transaction tx) { transactions.add(tx); }
+
+    // ── TASK 1 (Bug Fix): getBalance(accountId) ───────────────────
+    // BUG: no accountId filter — all transactions summed for every account
+    // FIX: if (tx.accountId == accountId) — only count this account's txns
+    public double getBalance(int accountId) {
+        double balance = 0.0;
+        for (Transaction tx : transactions) {
+            if (tx.accountId == accountId) { // FIX: filter by accountId
+                if (tx.type == TransactionType.CREDIT) balance += tx.amount;
+                else balance -= tx.amount;
+            }
+        }
+        return balance;
+    }
+
+    // ── TASK 2: getAverageTransactionAmountByAccount() ────────────
+    // Two maps (sum + count) → divide at end. No status filter needed.
+    public Map<Integer, Double> getAverageTransactionAmountByAccount() {
+        Map<Integer, Double>  sumMap   = new HashMap<>();
+        Map<Integer, Integer> countMap = new HashMap<>();
+
+        for (Transaction tx : transactions) {
+            sumMap.put(tx.getAccountId(),
+                sumMap.getOrDefault(tx.getAccountId(), 0.0) + tx.getAmount());
+            countMap.put(tx.getAccountId(),
+                countMap.getOrDefault(tx.getAccountId(), 0) + 1);
+        }
+
+        Map<Integer, Double> result = new HashMap<>();
+        for (int id : sumMap.keySet()) {
+            result.put(id, sumMap.get(id) / countMap.get(id));
+        }
+        return result;
+    }
+
+    // ── TASK 3: getTransactionFees() ──────────────────────────────
+    // Step 1: Group by accountId using computeIfAbsent
+    // Step 2: Sort each account's list by timestamp — CRITICAL
+    // Step 3: Loop with index, apply fees from index 3 onward
+    public Map<Integer, Double> getTransactionFees() {
+
+        // STEP 1: Group transactions by accountId
+        Map<Integer, List<Transaction>> txByAccount = new HashMap<>();
+        for (Transaction tx : transactions) {
+            // computeIfAbsent: creates new list if key absent, returns existing list if present
+            txByAccount.computeIfAbsent(tx.getAccountId(), k -> new ArrayList<>()).add(tx);
+        }
+
+        Map<Integer, Double> fees = new HashMap<>();
+
+        for (Map.Entry<Integer, List<Transaction>> entry : txByAccount.entrySet()) {
+            List<Transaction> accountTxs = entry.getValue();
+
+            // STEP 2: Sort by timestamp — without this, out-of-order input gives wrong fees
+            // Comparator.comparingLong: sorts numerically by getTimestampSec() value
+            accountTxs.sort(Comparator.comparingLong(Transaction::getTimestampSec));
+
+            // STEP 3: Apply fee rules using index
+            double totalFee = 0.0;
+            for (int i = 0; i < accountTxs.size(); i++) {
+                if (i >= 3) { // index 0,1,2 = FREE. index 3+ = billable
+                    Transaction tx = accountTxs.get(i);
+                    totalFee += (tx.getType() == TransactionType.CREDIT) ? 1.0 : 2.0;
+                }
+            }
+            fees.put(entry.getKey(), totalFee);
+        }
+        return fees;
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  MAIN CLASS — runs all 3 tests
+// ══════════════════════════════════════════════════════════════════
+public class Q2_Payment {
+
+    public static void main(String[] args) {
+        testTask1_BugFix();
+        testTask2_AverageAmount();
+        testTask3_Fees();
+        System.out.println("\nAll 3 tasks PASSED!");
+    }
+
+    // ── Test Task 1 ────────────────────────────────────────────────
+    static void testTask1_BugFix() {
+        System.out.println("Task 1 (Bug Fix): getBalance...");
+        AccountManager mgr = new AccountManager();
+
+        // Account 1: +50 -10 = 40.0 | Account 2: +80 -5.5 -14.5 = 60.0
+        mgr.addTransaction(new Transaction(201, 1, TransactionType.CREDIT, 50.0, 2000));
+        mgr.addTransaction(new Transaction(202, 2, TransactionType.CREDIT, 80.0, 2005));
+        mgr.addTransaction(new Transaction(203, 1, TransactionType.DEBIT,  10.0, 2010));
+        mgr.addTransaction(new Transaction(204, 2, TransactionType.DEBIT,   5.5, 2015));
+        mgr.addTransaction(new Transaction(205, 2, TransactionType.DEBIT,  14.5, 2020));
+
+        double bal1 = mgr.getBalance(1);
+        double bal2 = mgr.getBalance(2);
+
+        assert Math.abs(bal1 - 40.0) < 0.01 : "A1 expected 40.0, got " + bal1;
+        assert Math.abs(bal2 - 60.0) < 0.01 : "A2 expected 60.0, got " + bal2;
+
+        System.out.println("  A1=" + bal1 + "  A2=" + bal2 + "  PASS");
+    }
+
+    // ── Test Task 2 ────────────────────────────────────────────────
+    static void testTask2_AverageAmount() {
+        System.out.println("Task 2: getAverageTransactionAmountByAccount...");
+        AccountManager mgr = new AccountManager();
+
+        // A1: (100+30+20+10)/4=40.0 | A2: (80+5.5+14.5)/3=33.33
+        mgr.addTransaction(new Transaction(101, 1, TransactionType.CREDIT, 100.0, 1000));
+        mgr.addTransaction(new Transaction(102, 1, TransactionType.DEBIT,   30.0, 1010));
+        mgr.addTransaction(new Transaction(103, 1, TransactionType.DEBIT,   20.0, 1020));
+        mgr.addTransaction(new Transaction(104, 1, TransactionType.CREDIT,  10.0, 1030));
+        mgr.addTransaction(new Transaction(201, 2, TransactionType.CREDIT,  80.0, 2005));
+        mgr.addTransaction(new Transaction(202, 2, TransactionType.DEBIT,    5.5, 2015));
+        mgr.addTransaction(new Transaction(203, 2, TransactionType.DEBIT,   14.5, 2020));
+
+        Map<Integer, Double> avg = mgr.getAverageTransactionAmountByAccount();
+
+        assert Math.abs(avg.get(1) - 40.0)   < 0.01 : "A1 expected 40.0";
+        assert Math.abs(avg.get(2) - 33.333) < 0.1  : "A2 expected 33.33";
+
+        System.out.println("  A1 avg=" + avg.get(1)
+            + "  A2 avg=" + String.format("%.2f", avg.get(2)) + "  PASS");
+    }
+
+    // ── Test Task 3 ────────────────────────────────────────────────
+    static void testTask3_Fees() {
+        System.out.println("Task 3: getTransactionFees...");
+        AccountManager mgr = new AccountManager();
+
+        // A1: 5 txns → first 3 free → tx4=DEBIT($2) tx5=CREDIT($1) → $3
+        mgr.addTransaction(new Transaction(1, 1, TransactionType.CREDIT, 100.0, 1000));
+        mgr.addTransaction(new Transaction(2, 1, TransactionType.DEBIT,   20.0, 1010));
+        mgr.addTransaction(new Transaction(3, 1, TransactionType.CREDIT,  10.0, 1020));
+        mgr.addTransaction(new Transaction(4, 1, TransactionType.DEBIT,    5.0, 1030)); // $2
+        mgr.addTransaction(new Transaction(5, 1, TransactionType.CREDIT,   7.0, 1040)); // $1
+
+        // A2: 4 txns → first 3 free → tx4=DEBIT($2) → $2
+        mgr.addTransaction(new Transaction(6, 2, TransactionType.DEBIT,  50.0, 2000));
+        mgr.addTransaction(new Transaction(7, 2, TransactionType.DEBIT,  10.0, 2010));
+        mgr.addTransaction(new Transaction(8, 2, TransactionType.CREDIT, 20.0, 2020));
+        mgr.addTransaction(new Transaction(9, 2, TransactionType.DEBIT,   5.0, 2030)); // $2
+
+        // A3: 4 txns added OUT OF ORDER — after sort 4th is CREDIT($1) → $1
+        mgr.addTransaction(new Transaction(26, 3, TransactionType.DEBIT,  50.0, 2000));
+        mgr.addTransaction(new Transaction(27, 3, TransactionType.DEBIT,  10.0, 2010));
+        mgr.addTransaction(new Transaction(28, 3, TransactionType.CREDIT, 20.0, 2020)); // 4th after sort → $1
+        mgr.addTransaction(new Transaction(29, 3, TransactionType.DEBIT,   5.0, 2005)); // sorts to 2nd position
+
+        Map<Integer, Double> fees = mgr.getTransactionFees();
+
+        assert Math.abs(fees.get(1) - 3.0) < 0.01 : "A1 expected $3";
+        assert Math.abs(fees.get(2) - 2.0) < 0.01 : "A2 expected $2";
+        assert Math.abs(fees.get(3) - 1.0) < 0.01 : "A3 expected $1";
+
+        System.out.println("  A1=$" + fees.get(1)
+            + "  A2=$" + fees.get(2)
+            + "  A3=$" + fees.get(3) + "  PASS");
+    }
+}
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+import java.util.*;
+
+// ╔══════════════════════════════════════════════════════════════════╗
+//  QUESTION 3 — GYM MEMBERSHIP SYSTEM
+//  HOW TO RUN: Paste into https://onlinegdb.com/online_java_compiler
+//  Select Java → click Run
+// ╚══════════════════════════════════════════════════════════════════╝
+
+/*
+ ┌─────────────────────────────────────────────────────────────────┐
+  PROBLEM STATEMENT
+  BRONZE: 1st workout free, then $10/hr
+  SILVER: first 3 free, then $8/hr
+  GOLD:   first 5 free, then $6/hr
+  Duration rounds UP to nearest hour: (duration + 59) / 60
+
+  TASK 1 (Bug Fix): Member.equals() missing
+    BUG: Java's default equals() compares memory addresses.
+         Two "new Member(1,...)" objects are NEVER equal by default.
+    FIX: Override equals() to compare by memberId.
+
+  TASK 2.1: addWorkout(memberId, workout)
+    If member doesn't exist → silently ignore.
+
+  TASK 2.2: getAverageWorkoutDurations()
+    Return {memberId → average duration in minutes}.
+
+  TASK 3: getPaymentDues()
+    Return {memberId → total amount owed}.
+ └─────────────────────────────────────────────────────────────────┘
+*/
+
+// ══════════════════════════════════════════════════════════════════
+//  SUPPORTING CLASSES
+// ══════════════════════════════════════════════════════════════════
+
+enum MembershipStatus { BRONZE, SILVER, GOLD }
+
+// Workout: one gym session — times in minutes from midnight
+class Workout {
+    private int id, startTime, endTime;
+    Workout(int id, int start, int end) { this.id=id; startTime=start; endTime=end; }
+    public int getId()        { return id; }
+    public int getStartTime() { return startTime; }
+    public int getEndTime()   { return endTime; }
+    // getDuration: how long the session lasted in minutes
+    public int getDuration()  { return endTime - startTime; }
+}
+
+// Member: one gym member with ID, name, and membership tier
+class Member {
+    public int memberId;
+    public String name;
+    public MembershipStatus membershipStatus;
+
+    Member(int id, String name, MembershipStatus status) {
+        this.memberId = id; this.name = name; this.membershipStatus = status;
+    }
+
+    // ── TASK 1 (Bug Fix): override equals() ───────────────────────
+    // BUG: Java's default equals() compares memory addresses (references)
+    //      Two different "new Member(1,...)" objects → always NOT equal
+    // FIX: compare by memberId (the unique identifier for each member)
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;               // same object → equal
+        if (!(o instanceof Member)) return false; // not a Member → not equal
+        Member m = (Member) o;
+        return this.memberId == m.memberId;        // FIX: compare by ID
+    }
+
+    // Always override hashCode with equals — keeps HashMap/HashSet working
+    @Override
+    public int hashCode() { return Integer.hashCode(memberId); }
+
+    @Override
+    public String toString() {
+        return "Member ID: " + memberId + ", Name: " + name + ", Status: " + membershipStatus;
+    }
+}
+
+class MembershipStatistics {
+    public int totalMembers, totalPaidMembers;
+    public double conversionRate;
+    MembershipStatistics(int t, int p, double r) {
+        totalMembers=t; totalPaidMembers=p; conversionRate=r;
+    }
+}
+
+// Membership: manages all members and their workouts
+class Membership {
+    public List<Member> members = new ArrayList<>();
+    Map<Integer, List<Workout>> workoutsByMember = new HashMap<>();
+
+    void addMember(Member m) { members.add(m); }
+
+    void updateMembership(int memberId, MembershipStatus status) {
+        for (Member m : members)
+            if (m.memberId == memberId) { m.membershipStatus = status; break; }
+    }
+
+    MembershipStatistics getMembershipStatistics() {
+        int premium = 0;
+        for (Member m : members)
+            if (m.membershipStatus == MembershipStatus.GOLD
+             || m.membershipStatus == MembershipStatus.SILVER) premium++;
+        double rate = members.size() == 0 ? 0.0
+                    : (premium / (double) members.size()) * 100.0;
+        return new MembershipStatistics(members.size(), premium, rate);
+    }
+
+    // ── TASK 2.1: addWorkout() ────────────────────────────────────
+    // If member exists → add workout. If not → silently ignore.
+    // computeIfAbsent: creates new list if key absent, returns existing list if present
+    public void addWorkout(Integer memId, Workout wk) {
+        for (Member m : members) {
+            if (m.memberId == memId) {
+                workoutsByMember.computeIfAbsent(memId, k -> new ArrayList<>()).add(wk);
+                return; // found and added → stop
+            }
+        }
+        // member not found → do nothing (silently ignore)
+    }
+
+    // ── TASK 2.2: getAverageWorkoutDurations() ────────────────────
+    // entrySet() gives each key-value pair. sum/count → average.
+    public Map<Integer, Double> getAverageWorkoutDurations() {
+        Map<Integer, Double> avgByMember = new HashMap<>();
+        for (Map.Entry<Integer, List<Workout>> entry : workoutsByMember.entrySet()) {
+            double total = 0.0;
+            for (Workout w : entry.getValue()) total += w.getDuration();
+            avgByMember.put(entry.getKey(), total / entry.getValue().size());
+        }
+        return avgByMember;
+    }
+
+    // ── TASK 3: getPaymentDues() ──────────────────────────────────
+    // CEILING DIVISION: (duration + 59) / 60  → rounds up to nearest hour
+    //   80min: (80+59)/60=2  ✓  60min: (60+59)/60=1  ✓  61min: (61+59)/60=2  ✓
+    public Map<Integer, Double> getPaymentDues() {
+        Map<Integer, Double> dueByMember = new HashMap<>();
+        for (Member member : members) {
+            int freeLimit, rate;
+            if (member.membershipStatus == MembershipStatus.BRONZE)      { freeLimit=1; rate=10; }
+            else if (member.membershipStatus == MembershipStatus.SILVER) { freeLimit=3; rate=8;  }
+            else                                                          { freeLimit=5; rate=6;  }
+
+            List<Workout> workouts = workoutsByMember.getOrDefault(member.memberId, new ArrayList<>());
+            double totalDue = 0.0;
+            // Start at index=freeLimit to skip the free workouts
+            for (int i = freeLimit; i < workouts.size(); i++) {
+                int hours = (workouts.get(i).getDuration() + 59) / 60; // ceiling division
+                totalDue += hours * rate;
+            }
+            dueByMember.put(member.memberId, totalDue);
+        }
+        return dueByMember;
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  MAIN CLASS — runs all tests
+// ══════════════════════════════════════════════════════════════════
+public class Q3_GymCollection {
+
+    public static void main(String[] args) {
+        testTask1_BugFix();
+        testTask2_AddWorkoutAndAverage();
+        testTask3_PaymentDues();
+        System.out.println("\nAll tasks PASSED!");
+    }
+
+    static void testTask1_BugFix() {
+        System.out.println("Task 1 (Bug Fix): Member.equals()...");
+        Member m1 = new Member(1, "John Doe", MembershipStatus.BRONZE);
+        Member m2 = new Member(1, "John Doe", MembershipStatus.BRONZE);
+        Member m3 = new Member(2, "Jane Doe", MembershipStatus.GOLD);
+
+        assert  m1.equals(m2) : "same memberId → should be equal";
+        assert !m1.equals(m3) : "different memberId → should NOT be equal";
+        List<Member> list = new ArrayList<>();
+        list.add(m1);
+        assert list.get(0).equals(m2) : "list.get(0).equals(testMember) should be true";
+
+        System.out.println("  m1.equals(m2)=" + m1.equals(m2)
+            + "  m1.equals(m3)=" + m1.equals(m3) + "  PASS");
+    }
+
+    static void testTask2_AddWorkoutAndAverage() {
+        System.out.println("Task 2: addWorkout + getAverageWorkoutDurations...");
+        Membership gym = new Membership();
+        gym.addMember(new Member(12, "John",   MembershipStatus.SILVER));
+        gym.addMember(new Member(22, "Alex",   MembershipStatus.BRONZE));
+        gym.addMember(new Member(31, "Marie",  MembershipStatus.GOLD));
+        gym.addMember(new Member(37, "George", MembershipStatus.SILVER));
+
+        // M12: 10+55+10=75 / 3 = avg 25.0
+        gym.addWorkout(12, new Workout(11, 10, 20));
+        gym.addWorkout(12, new Workout(47, 100, 155));
+        gym.addWorkout(12, new Workout(78, 1000, 1010));
+        // M22: 20+80=100 / 2 = avg 50.0
+        gym.addWorkout(22, new Workout(24, 15, 35));
+        gym.addWorkout(22, new Workout(56, 120, 200));
+        // M31: 45+100=145 / 2 = avg 72.5
+        gym.addWorkout(31, new Workout(32, 45, 90));
+        gym.addWorkout(31, new Workout(62, 300, 400));
+        gym.addWorkout(99, new Workout(99, 0, 60)); // member 99 doesn't exist → ignored
+
+        Map<Integer, Double> avg = gym.getAverageWorkoutDurations();
+
+        assert Math.abs(avg.get(12) - 25.0) < 0.1 : "M12 expected 25.0";
+        assert Math.abs(avg.get(22) - 50.0) < 0.1 : "M22 expected 50.0";
+        assert Math.abs(avg.get(31) - 72.5) < 0.1 : "M31 expected 72.5";
+        assert !avg.containsKey(37) : "M37 should NOT appear";
+
+        System.out.println("  M12=" + avg.get(12) + "  M22=" + avg.get(22)
+            + "  M31=" + avg.get(31) + "  M37 absent=" + !avg.containsKey(37) + "  PASS");
+    }
+
+    static void testTask3_PaymentDues() {
+        System.out.println("Task 3: getPaymentDues...");
+        Membership gym = new Membership();
+
+        // BRONZE Bob: 1 free, $10/hr → w1=free, w2=2hrs=$20, w3=1hr=$10 → $30
+        gym.addMember(new Member(1, "Bronze Bob", MembershipStatus.BRONZE));
+        gym.addWorkout(1, new Workout(1, 0, 60));
+        gym.addWorkout(1, new Workout(2, 0, 80));
+        gym.addWorkout(1, new Workout(3, 0, 30));
+
+        // SILVER Sue: 3 free, $8/hr → w4=2hrs=$16, w5=2hrs=$16 → $32
+        gym.addMember(new Member(2, "Silver Sue", MembershipStatus.SILVER));
+        gym.addWorkout(2, new Workout(1, 0, 60));
+        gym.addWorkout(2, new Workout(2, 0, 60));
+        gym.addWorkout(2, new Workout(3, 0, 60));
+        gym.addWorkout(2, new Workout(4, 0, 120));
+        gym.addWorkout(2, new Workout(5, 0, 61));
+
+        // GOLD Gary: 5 free, $6/hr → w6=2hrs=$12 → $12
+        gym.addMember(new Member(3, "Gold Gary", MembershipStatus.GOLD));
+        for (int i = 1; i <= 5; i++) gym.addWorkout(3, new Workout(i, 0, 60));
+        gym.addWorkout(3, new Workout(6, 0, 90));
+
+        // GOLD Grace: 4 workouts — all free → $0
+        gym.addMember(new Member(4, "Gold Grace", MembershipStatus.GOLD));
+        for (int i = 1; i <= 4; i++) gym.addWorkout(4, new Workout(i, 0, 60));
+
+        Map<Integer, Double> due = gym.getPaymentDues();
+
+        assert Math.abs(due.get(1) - 30.0) < 0.01 : "Bob expected $30";
+        assert Math.abs(due.get(2) - 32.0) < 0.01 : "Sue expected $32";
+        assert Math.abs(due.get(3) - 12.0) < 0.01 : "Gary expected $12";
+        assert Math.abs(due.get(4) -  0.0) < 0.01 : "Grace expected $0";
+
+        System.out.println("  Bob=$" + due.get(1) + "  Sue=$" + due.get(2)
+            + "  Gary=$" + due.get(3) + "  Grace=$" + due.get(4) + "  PASS");
+    }
+}
+
+
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+import java.util.*;
+
+// ╔══════════════════════════════════════════════════════════════════╗
+//  QUESTION 4 — RUN COLLECTION (OBSTACLE COURSE)
+//  HOW TO RUN: Paste into https://onlinegdb.com/online_java_compiler
+//  Select Java → click Run
+// ╚══════════════════════════════════════════════════════════════════╝
+
+/*
+ ┌─────────────────────────────────────────────────────────────────┐
+  PROBLEM STATEMENT
+
+  TASK 1 (Bug Fix): personalBest()
+    BUG: No filter → incomplete Run4 (total=13) wins over real best (17).
+    FIX: .filter(r -> r.complete) before finding minimum.
+
+  TASK 2: bestOfBests()
+    Best time per obstacle across ALL runs (even incomplete), summed.
+    KEY: guard with "run.obstacleTimes.size() > i" before accessing index i.
+
+  TASK 3: chanceOfPersonalBest(inProgress)
+    Monte Carlo simulation — 10,000 trials using random historical times.
+    Returns probability (0.0–1.0) of beating personal best.
+ └─────────────────────────────────────────────────────────────────┘
+*/
+
+// ══════════════════════════════════════════════════════════════════
+//  SUPPORTING CLASSES
+// ══════════════════════════════════════════════════════════════════
+
+// Course: name and total obstacle count for one obstacle course
+class Course {
+    String title;
+    int obstacleCount;
+    Course(String title, int count) { this.title=title; this.obstacleCount=count; }
+    @Override public boolean equals(Object o) {
+        if (!(o instanceof Course)) return false;
+        Course c = (Course) o;
+        return c.title.equals(this.title) && c.obstacleCount == this.obstacleCount;
+    }
+    @Override public int hashCode() { return title.hashCode() * obstacleCount; }
+}
+
+// Run: one attempt at completing the obstacle course
+class Run {
+    Course course;
+    boolean complete;                // true only when ALL obstacles are done
+    List<Integer> obstacleTimes;     // times recorded so far
+
+    Run(Course c) { course=c; complete=false; obstacleTimes=new ArrayList<>(); }
+
+    // addObstacleTime: records next obstacle's time; marks complete when all N done
+    void addObstacleTime(int t) {
+        if (complete) throw new IllegalStateException("run is full");
+        obstacleTimes.add(t);
+        if (obstacleTimes.size() == course.obstacleCount) complete = true;
+    }
+
+    // getRunTime: sum of all recorded obstacle times (partial if incomplete)
+    int getRunTime() { return obstacleTimes.stream().mapToInt(Integer::intValue).sum(); }
+}
+
+// RunCollection: manages all runs for one course and provides query methods
+class RunCollection {
+    Course course;
+    List<Run> runs = new ArrayList<>();
+    RunCollection(Course c) { course=c; }
+
+    void addRun(Run run) {
+        if (!run.course.equals(course)) throw new IllegalArgumentException("Course mismatch");
+        runs.add(run);
+    }
+    int getNumRuns() { return runs.size(); }
+
+    // ── TASK 1 (Bug Fix): personalBest() ──────────────────────────
+    // BUG: no filter → incomplete runs (smaller totals) incorrectly win
+    // FIX Option 1 (Stream): .filter(r -> r.complete)
+    public int personalBest() {
+        return runs.stream()
+            .filter(r -> r.complete)       // FIX: only COMPLETE runs
+            .mapToInt(r -> r.getRunTime())
+            .min()
+            .orElse(Integer.MAX_VALUE);    // no complete runs → return MAX
+    }
+
+    // FIX Option 2 (For loop): easier to write under interview pressure
+    public int personalBest_ForLoop() {
+        int best = Integer.MAX_VALUE;
+        for (Run run : runs) {
+            if (!run.complete) continue;   // FIX: skip incomplete
+            if (run.getRunTime() < best) best = run.getRunTime();
+        }
+        return best;
+    }
+
+    // ── TASK 2: bestOfBests() ─────────────────────────────────────
+    // Outer loop = obstacle position, inner loop = each run.
+    // GUARD: "run.obstacleTimes.size() > i" prevents IndexOutOfBoundsException
+    public int bestOfBests() {
+        int total = 0;
+        for (int i = 0; i < course.obstacleCount; i++) {
+            int obstacleMin = Integer.MAX_VALUE;
+            for (Run run : runs) {
+                if (run.obstacleTimes.size() > i) { // GUARD: only if run reached obstacle i
+                    obstacleMin = Math.min(obstacleMin, run.obstacleTimes.get(i));
+                }
+            }
+            total += obstacleMin;
+        }
+        return total;
+    }
+
+    // ── TASK 3: chanceOfPersonalBest(inProgress) ──────────────────
+    // Monte Carlo: build historical data → 10,000 random simulations → count successes
+    public double chanceOfPersonalBest(Run inProgress) {
+        int personalBest = personalBest();
+        int totalObstacles = course.obstacleCount;
+
+        // Build historical data: historical.get(i) = all known times for obstacle i
+        List<List<Integer>> historical = new ArrayList<>();
+        for (int i = 0; i < totalObstacles; i++) historical.add(new ArrayList<>());
+        for (Run run : runs)
+            for (int i = 0; i < run.obstacleTimes.size(); i++)
+                historical.get(i).add(run.obstacleTimes.get(i));
+
+        int currentTotal       = inProgress.getRunTime();
+        int completedObstacles = inProgress.obstacleTimes.size();
+
+        if (currentTotal > personalBest) return 0.0; // already over best → 0%
+
+        int trials=10000, success=0;
+        Random random = new Random();
+
+        for (int t = 0; t < trials; t++) {
+            int simTotal = currentTotal;
+            for (int j = completedObstacles; j < totalObstacles; j++) {
+                // Pick a random historical time for obstacle j
+                simTotal += historical.get(j).get(random.nextInt(historical.get(j).size()));
+                if (simTotal > personalBest) break; // this trial failed → stop early
+            }
+            if (simTotal <= personalBest) success++; // trial beat personal best
+        }
+
+        return success / (double) trials; // probability = successes / total trials
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  MAIN CLASS — runs all tests
+// ══════════════════════════════════════════════════════════════════
+public class Q4_RunCollection {
+
+    public static void main(String[] args) {
+        testTask1_BugFix();
+        testTask2_BestOfBests();
+        testTask3_ChanceOfPersonalBest();
+        System.out.println("\nAll tasks PASSED!");
+    }
+
+    static RunCollection makeRC(Course course, int[][] data) {
+        RunCollection rc = new RunCollection(course);
+        for (int[] times : data) {
+            Run run = new Run(course);
+            for (int t : times) run.addObstacleTime(t);
+            rc.addRun(run);
+        }
+        return rc;
+    }
+
+    static void testTask1_BugFix() {
+        System.out.println("Task 1 (Bug Fix): personalBest...");
+        Course c = new Course("Test", 4);
+        RunCollection rc = makeRC(c, new int[][]{
+            {3,4,5,6}, {4,4,4,5}, {4,5,4,6}, {5,5,3}
+        });
+        assert rc.personalBest()         == 17 : "stream: expected 17, got " + rc.personalBest();
+        assert rc.personalBest_ForLoop() == 17 : "forLoop: expected 17";
+        System.out.println("  stream=" + rc.personalBest()
+            + "  forLoop=" + rc.personalBest_ForLoop()
+            + "  (not 13 from incomplete run)  PASS");
+    }
+
+    static void testTask2_BestOfBests() {
+        System.out.println("Task 2: bestOfBests...");
+        Course c = new Course("Test", 4);
+        RunCollection rc = makeRC(c, new int[][]{
+            {3,4,5,6}, {4,4,4,5}, {4,5,4,6}, {5,5,3}
+        });
+        assert rc.bestOfBests() == 15 : "expected 15, got " + rc.bestOfBests();
+        System.out.println("  bestOfBests=" + rc.bestOfBests() + "  (3+4+3+5=15)  PASS");
+    }
+
+    static void testTask3_ChanceOfPersonalBest() {
+        System.out.println("Task 3: chanceOfPersonalBest (Monte Carlo)...");
+        Course c = new Course("Test", 10);
+        int[][] data = {
+            {32,37},{31,29,34,25,25,39},{25,34,38,24,26,39,33},
+            {39,21,39,34,39,29,31,22,28,20},{23,22,35,33,36,21,29,37,24,34},
+            {28,34,28,22,40,28,31,33,25,20},{20,38,40,28,34,22},
+            {36,39,20,32,38,24,22},{40,20,21,37,32,30,40,25,37,30},
+            {21,35,30,37,32,40,26,29,29}
+        };
+        RunCollection rc = makeRC(c, data);
+        Run inProgress = new Run(c);
+        inProgress.addObstacleTime(19);
+        inProgress.addObstacleTime(19);
+        inProgress.addObstacleTime(19);
+        double chance = rc.chanceOfPersonalBest(inProgress);
+        assert chance >= 0.85 && chance <= 1.0 : "expected 0.85-1.0, got " + chance;
+        System.out.println("  chanceOfPersonalBest=" + String.format("%.4f", chance)
+            + "  (~0.93 expected)  PASS");
+    }
+}
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+import java.util.*;
+
+// ╔══════════════════════════════════════════════════════════════════╗
+//  QUESTION 5 — STOCK COLLECTION
+//  HOW TO RUN: Paste into https://onlinegdb.com/online_java_compiler
+//  Select Java → click Run
+// ╚══════════════════════════════════════════════════════════════════╝
+
+/*
+ ┌─────────────────────────────────────────────────────────────────┐
+  PROBLEM STATEMENT
+
+  TASK 1 (Bug Fix): getMaxPrice() / getMinPrice() / getAvgPrice()
+    All 3 crash when priceRecords is EMPTY:
+    - getMaxPrice/getMinPrice: .getAsInt() on empty OptionalInt → NoSuchElementException
+    - getAvgPrice: total / size when size=0 → ArithmeticException
+    FIX: Add "if (priceRecords.isEmpty()) return -1" at top of each method.
+
+  TASK 2: getBiggestChange()
+    Return Object[]{change, earlierDate, laterDate} for the pair of
+    consecutive days with the biggest absolute price change.
+    KEY: "YYYY-MM-DD" strings sort alphabetically = chronologically.
+    Return null if fewer than 2 records.
+ └─────────────────────────────────────────────────────────────────┘
+*/
+
+// ══════════════════════════════════════════════════════════════════
+//  SUPPORTING CLASSES
+// ══════════════════════════════════════════════════════════════════
+
+// Stock: identifies one company's stock by symbol and name
+class Stock {
+    String symbol, name;
+    Stock(String sym, String name) { this.symbol=sym; this.name=name; }
+    @Override public boolean equals(Object o) {
+        if (!(o instanceof Stock)) return false;
+        Stock s = (Stock) o;
+        return symbol.equals(s.symbol) && name.equals(s.name);
+    }
+    @Override public int hashCode() { return Objects.hash(symbol, name); }
+}
+
+// PriceRecord: one price data point — stock, price, date
+// Date format "YYYY-MM-DD" → alphabetical sort = chronological sort
+class PriceRecord {
+    Stock stock; int price; String date;
+    PriceRecord(Stock s, int p, String d) { stock=s; price=p; date=d; }
+}
+
+// StockCollection: manages all price records for one stock
+class StockCollection {
+    List<PriceRecord> priceRecords = new ArrayList<>();
+    Stock stock;
+    StockCollection(Stock s) { stock=s; }
+
+    void addPriceRecord(PriceRecord pr) {
+        if (!pr.stock.equals(stock)) throw new IllegalArgumentException("Stock mismatch");
+        priceRecords.add(pr);
+    }
+    int getNumPriceRecords() { return priceRecords.size(); }
+
+    // ── TASK 1 (Bug Fix): getMaxPrice() ───────────────────────────
+    // BUG: .max().getAsInt() crashes with NoSuchElementException when list is empty
+    // FIX: check isEmpty() first → return -1 as sentinel value
+    int getMaxPrice() {
+        if (priceRecords.isEmpty()) return -1;
+        return priceRecords.stream().mapToInt(r -> r.price).max().getAsInt();
+    }
+
+    // ── TASK 1 (Bug Fix): getMinPrice() ───────────────────────────
+    // Same bug and fix as getMaxPrice — just using .min()
+    int getMinPrice() {
+        if (priceRecords.isEmpty()) return -1;
+        return priceRecords.stream().mapToInt(r -> r.price).min().getAsInt();
+    }
+
+    // ── TASK 1 (Bug Fix): getAvgPrice() ───────────────────────────
+    // BUG: total / priceRecords.size() crashes with division by zero when empty
+    // FIX: return -1.0 if empty
+    double getAvgPrice() {
+        if (priceRecords.isEmpty()) return -1.0;
+        double total = priceRecords.stream().mapToInt(r -> r.price).sum();
+        return total / priceRecords.size();
+    }
+
+    // ── TASK 2: getBiggestChange() ─────────────────────────────────
+    // Sort by date string (YYYY-MM-DD sorts alphabetically = chronologically)
+    // Compare consecutive pairs, track biggest absolute change
+    Object[] getBiggestChange() {
+        if (priceRecords.size() < 2) return null;
+
+        List<PriceRecord> sorted = new ArrayList<>(priceRecords);
+        sorted.sort((r1, r2) -> r1.date.compareTo(r2.date)); // string sort = date sort
+
+        // Initialise with first pair (0 and 1)
+        int biggestChange = sorted.get(1).price - sorted.get(0).price;
+        String earlierDate = sorted.get(0).date;
+        String laterDate   = sorted.get(1).date;
+
+        // Check remaining consecutive pairs
+        for (int i = 1; i < sorted.size() - 1; i++) {
+            int change = sorted.get(i+1).price - sorted.get(i).price;
+            // Compare ABSOLUTE values — biggest magnitude wins
+            if (Math.abs(change) > Math.abs(biggestChange)) {
+                biggestChange = change;
+                earlierDate   = sorted.get(i).date;
+                laterDate     = sorted.get(i+1).date;
+            }
+        }
+        return new Object[]{biggestChange, earlierDate, laterDate};
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  MAIN CLASS — runs all tests
+// ══════════════════════════════════════════════════════════════════
+public class Q5_StockCollection {
+
+    public static void main(String[] args) {
+        testTask1_BugFix();
+        testTask2_BiggestChange();
+        System.out.println("\nAll tasks PASSED!");
+    }
+
+    static StockCollection makeCollection(Stock stock, Object[][] data) {
+        StockCollection sc = new StockCollection(stock);
+        for (Object[] row : data)
+            sc.addPriceRecord(new PriceRecord(stock, (int) row[0], (String) row[1]));
+        return sc;
+    }
+
+    static void testTask1_BugFix() {
+        System.out.println("Task 1 (Bug Fix): getMaxPrice/getMinPrice/getAvgPrice on empty...");
+        Stock stock = new Stock("AAPL", "Apple Inc.");
+
+        StockCollection empty = new StockCollection(stock);
+        assert empty.getMaxPrice() == -1                       : "empty max expected -1";
+        assert empty.getMinPrice() == -1                       : "empty min expected -1";
+        assert Math.abs(empty.getAvgPrice() - (-1.0)) < 0.001 : "empty avg expected -1.0";
+        System.out.println("  EMPTY → max=-1 min=-1 avg=-1.0 (no crashes)");
+
+        StockCollection sc = makeCollection(stock, new Object[][]{
+            {110,"2023-06-29"},{112,"2023-07-01"},{90,"2023-06-28"},{105,"2023-07-06"}
+        });
+        assert sc.getMaxPrice() == 112                     : "max expected 112";
+        assert sc.getMinPrice() == 90                      : "min expected 90";
+        assert Math.abs(sc.getAvgPrice() - 104.25) < 0.01 : "avg expected 104.25";
+
+        System.out.println("  DATA → max=" + sc.getMaxPrice()
+            + "  min=" + sc.getMinPrice()
+            + "  avg=" + sc.getAvgPrice() + "  PASS");
+    }
+
+    static void testTask2_BiggestChange() {
+        System.out.println("Task 2: getBiggestChange...");
+        Stock stock = new Stock("AAPL", "Apple Inc.");
+
+        assert new StockCollection(stock).getBiggestChange() == null : "empty → null";
+
+        // Sorted: 90(06-25)→110(06-29)→112(07-01)→105(07-06) → biggest = +20
+        StockCollection sc1 = makeCollection(stock, new Object[][]{
+            {110,"2023-06-29"},{112,"2023-07-01"},{90,"2023-06-25"},{105,"2023-07-06"}
+        });
+        Object[] r1 = sc1.getBiggestChange();
+        assert (int)r1[0] == 20           : "change expected 20";
+        assert r1[1].equals("2023-06-25") : "earlier expected 2023-06-25";
+        assert r1[2].equals("2023-06-29") : "later expected 2023-06-29";
+        System.out.println("  Test1: " + Arrays.toString(r1) + "  PASS");
+
+        // Sorted: 210(1999-12-30)→180(2000-01-01)→190(2000-01-03)→200(2000-01-04) → biggest = -30
+        StockCollection sc2 = makeCollection(stock, new Object[][]{
+            {200,"2000-01-04"},{210,"1999-12-30"},{190,"2000-01-03"},{180,"2000-01-01"}
+        });
+        Object[] r2 = sc2.getBiggestChange();
+        assert (int)r2[0] == -30          : "change expected -30";
+        assert r2[1].equals("1999-12-30") : "earlier expected 1999-12-30";
+        assert r2[2].equals("2000-01-01") : "later expected 2000-01-01";
+        System.out.println("  Test2: " + Arrays.toString(r2) + "  PASS");
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+-----------------------------------------------------------------------------------------------------
+
+
+
+
+import java.util.*;
+
+// ╔══════════════════════════════════════════════════════════════════╗
+//  QUESTION 6 — TOLL BOOTH LOG ANALYSIS
+//  HOW TO RUN: Paste into https://onlinegdb.com/online_java_compiler
+//  Select Java → click Run
+// ╚══════════════════════════════════════════════════════════════════╝
+
+/*
+ ┌─────────────────────────────────────────────────────────────────┐
+  PROBLEM STATEMENT
+  Log line format: "34400.409 SXY288 210E ENTRY"
+   timestamp(sec)   plate   loc+dir   boothType
+
+  TASK 1 (Bug Fix): LogEntry.toString()
+    BUG: passes "timestamp" (String) to %f (expects double/float)
+         → MissingFormatArgumentException at runtime.
+    FIX: call getTimestamp() which returns a double.
+
+  TASK 2: countJourneys()
+    Count complete journeys. Every journey ends at EXIT → count EXIT entries.
+
+  TASK 3: catchSpeeders()
+    Speed = (distance_km × 3600) / time_seconds
+    Rule 1: Any segment ≥ 130 km/h → ticket
+    Rule 2: Two segments ≥ 120 km/h in same journey → ticket
+ └─────────────────────────────────────────────────────────────────┘
+*/
+
+// ══════════════════════════════════════════════════════════════════
+//  SUPPORTING CLASSES
+// ══════════════════════════════════════════════════════════════════
+
+// LogEntry: parses and stores one toll booth log line
+class LogEntry {
+    private final String timestamp;    // stored as String e.g. "34400.409"
+    private final String licensePlate;
+    private final String boothType;    // "ENTRY", "EXIT", or "MAINROAD"
+    private final int location;        // km from highway start
+    private final String direction;    // "EAST" or "WEST"
+
+    // Constructor: splits "44776.619 KTB918 310E MAINROAD" on spaces
+    LogEntry(String logLine) {
+        String[] tokens = logLine.split(" ");
+        this.timestamp    = tokens[0];
+        this.licensePlate = tokens[1];
+        this.boothType    = tokens[3];
+        this.location = Integer.parseInt(tokens[2].substring(0, tokens[2].length()-1));
+        this.direction = tokens[2].endsWith("E") ? "EAST" : "WEST";
+    }
+
+    // getTimestamp: parses String "34400.409" → double 34400.409
+    // This is what %f in toString() needs — a numeric type not a String
+    public double getTimestamp()    { return Float.parseFloat(timestamp); }
+    public String getLicensePlate() { return licensePlate; }
+    public String getBoothType()    { return boothType; }
+    public int getLocation()        { return location; }
+    public String getDirection()    { return direction; }
+
+    // ── TASK 1 (Bug Fix): toString() ──────────────────────────────
+    // BUG: String.format("...%f...", timestamp,...) — "timestamp" is a String!
+    //      %f expects double/float → MissingFormatArgumentException crash!
+    // FIX: use getTimestamp() which returns double — %f handles it correctly
+    @Override
+    public String toString() {
+        return String.format(
+            "<LogEntry timestamp: %f  license: %s  location: %d  direction: %s  booth: %s>",
+            getTimestamp(),  // FIX: was "timestamp" (String) → now getTimestamp() (double)
+            licensePlate, location, direction, boothType
+        );
+    }
+}
+
+// LogFile: manages a list of LogEntry objects and provides analysis
+class LogFile {
+    List<LogEntry> logEntries = new ArrayList<>();
+
+    // Constructor: takes array of log line strings (no file I/O needed)
+    LogFile(String[] lines) {
+        for (String line : lines)
+            if (!line.trim().isEmpty()) logEntries.add(new LogEntry(line.trim()));
+    }
+
+    LogEntry get(int i) { return logEntries.get(i); }
+    int size()          { return logEntries.size(); }
+
+    // ── TASK 2: countJourneys() ───────────────────────────────────
+    // Every complete journey ends at EXIT → count EXIT booth entries
+    public int countJourneys() {
+        int count = 0;
+        for (LogEntry e : logEntries)
+            if (e.getBoothType().equals("EXIT")) count++;
+        return count;
+    }
+
+    // ── TASK 3: catchSpeeders() ───────────────────────────────────
+    // Speed formula: (distance_km × 3600) / time_seconds = km/h
+    // Track per plate: timestamp, location, over-120 count, ticketed flag
+    // Reset at ENTRY (new journey). Add ticket at EXIT if speeding.
+    public List<String> catchSpeeders() {
+        List<String> tickets = new ArrayList<>();
+        Map<String, Double>  prevTime     = new HashMap<>();
+        Map<String, Integer> prevLocation = new HashMap<>();
+        Map<String, Integer> over120Count = new HashMap<>();
+        Map<String, Boolean> ticketed     = new HashMap<>();
+
+        for (LogEntry e : logEntries) {
+            String plate = e.getLicensePlate();
+            String type  = e.getBoothType();
+
+            if (type.equals("ENTRY")) {
+                // Start fresh tracking for this new journey
+                prevTime.put(plate, e.getTimestamp());
+                prevLocation.put(plate, e.getLocation());
+                over120Count.put(plate, 0);
+                ticketed.put(plate, false);
+
+            } else if (prevTime.containsKey(plate)) {
+                // On highway (MAINROAD or EXIT) → calculate segment speed
+                double timeDiff = e.getTimestamp() - prevTime.get(plate);
+                int distDiff    = Math.abs(e.getLocation() - prevLocation.get(plate));
+                double speed    = (distDiff * 3600.0) / timeDiff; // km/h
+
+                if (!ticketed.get(plate)) {
+                    if (speed >= 130.0) {
+                        ticketed.put(plate, true); // Rule 1: single segment ≥ 130
+                    } else if (speed >= 120.0) {
+                        int cnt = over120Count.get(plate) + 1;
+                        over120Count.put(plate, cnt);
+                        if (cnt >= 2) ticketed.put(plate, true); // Rule 2: two segments ≥ 120
+                    }
+                }
+
+                prevTime.put(plate, e.getTimestamp());
+                prevLocation.put(plate, e.getLocation());
+
+                if (type.equals("EXIT") && ticketed.get(plate)) tickets.add(plate);
+            }
+        }
+        return tickets;
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  MAIN CLASS — runs all tests
+// ══════════════════════════════════════════════════════════════════
+public class Q6_TollBooth {
+
+    public static void main(String[] args) {
+        testTask1_BugFix();
+        testTask2_CountJourneys();
+        testTask3_CatchSpeeders();
+        System.out.println("\nAll tasks PASSED!");
+    }
+
+    static void testTask1_BugFix() {
+        System.out.println("Task 1 (Bug Fix): LogEntry.toString() no longer crashes...");
+        String logLine = "44776.619 KTB918 310E MAINROAD";
+        LogEntry entry = new LogEntry(logLine);
+
+        assert Math.abs(entry.getTimestamp() - 44776.619f) < 0.1 : "timestamp wrong";
+        assert entry.getLicensePlate().equals("KTB918")           : "plate wrong";
+        assert entry.getLocation() == 310                          : "location wrong";
+        assert entry.getDirection().equals("EAST")                : "direction wrong";
+        assert entry.getBoothType().equals("MAINROAD")            : "boothType wrong";
+
+        String result = entry.toString(); // would crash before fix
+        assert result.contains("44776")  : "toString should contain timestamp";
+        assert result.contains("KTB918") : "toString should contain plate";
+
+        System.out.println("  toString() = " + result);
+        System.out.println("  PASS");
+
+        LogEntry entry2 = new LogEntry("52160.132 ABC123 400W ENTRY");
+        assert entry2.getLocation() == 400          : "location should be 400";
+        assert entry2.getDirection().equals("WEST") : "direction should be WEST";
+        System.out.println("  West direction: loc=" + entry2.getLocation()
+            + "  dir=" + entry2.getDirection() + "  PASS");
+    }
+
+    static void testTask2_CountJourneys() {
+        System.out.println("Task 2: countJourneys...");
+        String[] lines = {
+            "90750.191 JOX304 250E ENTRY",
+            "91081.684 JOX304 260E MAINROAD",
+            "91082.101 THX138 110E ENTRY",
+            "91483.251 JOX304 270E MAINROAD",
+            "91873.920 THX138 120E MAINROAD",
+            "91874.493 JOX304 280E EXIT",
+            "91982.102 THX138 290E EXIT",
+            "92301.302 THX138 300E ENTRY",
+            "92371.302 THX138 310E EXIT"
+        };
+        LogFile lf = new LogFile(lines);
+        assert lf.countJourneys() == 3 : "expected 3, got " + lf.countJourneys();
+        System.out.println("  countJourneys=" + lf.countJourneys() + "  PASS");
+    }
+
+    static void testTask3_CatchSpeeders() {
+        System.out.println("Task 3: catchSpeeders...");
+        String[] lines = {
+            "1000.000 TST001 100E ENTRY",
+            "1500.000 TST001 110E MAINROAD", // 72 km/h → safe
+            "2000.000 TST001 120E EXIT",
+            "1000.000 TST002 270W ENTRY",
+            "1275.000 TST002 260W EXIT",     // 130.91 km/h → Rule 1 TICKET
+            "3000.000 TST003 200E ENTRY",
+            "3295.000 TST003 210E MAINROAD", // 122 km/h → 1st flag
+            "3590.000 TST003 220E EXIT",     // 122 km/h → 2nd flag → Rule 2 TICKET
+        };
+        LogFile lf = new LogFile(lines);
+        List<String> tickets = lf.catchSpeeders();
+        System.out.println("  Tickets: " + tickets);
+        assert  tickets.contains("TST002") : "TST002 should be ticketed";
+        assert  tickets.contains("TST003") : "TST003 should be ticketed";
+        assert !tickets.contains("TST001") : "TST001 should NOT be ticketed";
+        System.out.println("  TST001 safe, TST002+TST003 ticketed  PASS");
+    }
+}
