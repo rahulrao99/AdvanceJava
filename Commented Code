@@ -1,0 +1,4070 @@
+import java.util.*; // Importing all utility classes like List, ArrayList, Map, HashMap
+
+// ╔══════════════════════════════════════════════════════════════════╗
+//  QUESTION 6 — TOLL BOOTH LOG ANALYSIS
+// ╚══════════════════════════════════════════════════════════════════╝
+
+
+// LogEntry class is responsible for parsing and storing one log record
+class LogEntry {
+
+    // Storing timestamp as String from input log
+    private final String timestamp;
+
+    // Storing vehicle number plate
+    private final String licensePlate;
+
+    // Storing booth type like ENTRY / EXIT / MAINROAD
+    private final String boothType;
+
+    // Storing highway location in KM
+    private final int location;
+
+    // Storing direction EAST or WEST
+    private final String direction;
+
+    // Constructor to parse each log line
+    LogEntry(String logLine) {
+
+        // Splitting input string using spaces
+        String[] tokens = logLine.split(" ");
+
+        // Assigning timestamp from first token
+        this.timestamp = tokens[0];
+
+        // Assigning license plate from second token
+        this.licensePlate = tokens[1];
+
+        // Assigning booth type from fourth token
+        this.boothType = tokens[3];
+
+        // Extracting numeric location by removing last direction character
+        this.location =
+            Integer.parseInt(tokens[2].substring(0, tokens[2].length() - 1));
+
+        // Checking last character to determine EAST or WEST direction
+        this.direction =
+            tokens[2].endsWith("E") ? "EAST" : "WEST";
+    }
+
+    // Converting timestamp String into numeric double value
+    public double getTimestamp() {
+
+        // Parsing string into float value
+        return Float.parseFloat(timestamp);
+    }
+
+    // Getter method to return license plate
+    public String getLicensePlate() {
+        return licensePlate;
+    }
+
+    // Getter method to return booth type
+    public String getBoothType() {
+        return boothType;
+    }
+
+    // Getter method to return location
+    public int getLocation() {
+        return location;
+    }
+
+    // Getter method to return direction
+    public String getDirection() {
+        return direction;
+    }
+
+    // Overriding toString() method for readable object printing
+    @Override
+    public String toString() {
+
+        // Returning formatted string representation of object
+        return String.format(
+            "<LogEntry timestamp: %f  license: %s  location: %d  direction: %s  booth: %s>",
+
+            // Passing numeric timestamp because %f expects float/double
+            getTimestamp(),
+
+            // Passing remaining values
+            licensePlate,
+            location,
+            direction,
+            boothType
+        );
+    }
+}
+
+
+// LogFile class manages complete log list and analysis operations
+class LogFile {
+
+    // Creating list to store all LogEntry objects
+    List<LogEntry> logEntries = new ArrayList<>();
+
+    // Constructor to load all log lines into objects
+    LogFile(String[] lines) {
+
+        // Adding loop to iterate through all input log lines
+        for (String line : lines)
+
+            // Adding condition to ignore empty lines
+            if (!line.trim().isEmpty())
+
+                // Creating LogEntry object and adding into list
+                logEntries.add(new LogEntry(line.trim()));
+    }
+
+    // Method to get entry at specific index
+    LogEntry get(int i) {
+
+        // Returning object from list
+        return logEntries.get(i);
+    }
+
+    // Method to get total log count
+    int size() {
+
+        // Returning list size
+        return logEntries.size();
+    }
+
+    // Method to count completed journeys
+    public int countJourneys() {
+
+        // Variable to store journey count
+        int count = 0;
+
+        // Looping through all log entries
+        for (LogEntry e : logEntries)
+
+            // Checking if booth type is EXIT
+            if (e.getBoothType().equals("EXIT"))
+
+                // Incrementing count because every EXIT means completed journey
+                count++;
+
+        // Returning total completed journeys
+        return count;
+    }
+
+    // Method to detect speeding vehicles
+    public List<String> catchSpeeders() {
+
+        // Creating list to store ticketed vehicle numbers
+        List<String> tickets = new ArrayList<>();
+
+        // Map to store previous timestamp of each vehicle
+        Map<String, Double> prevTime = new HashMap<>();
+
+        // Map to store previous location of each vehicle
+        Map<String, Integer> prevLocation = new HashMap<>();
+
+        // Map to count how many times speed crossed 120
+        Map<String, Integer> over120Count = new HashMap<>();
+
+        // Map to track whether ticket already issued
+        Map<String, Boolean> ticketed = new HashMap<>();
+
+        // Looping through every log entry
+        for (LogEntry e : logEntries) {
+
+            // Extracting vehicle plate number
+            String plate = e.getLicensePlate();
+
+            // Extracting booth type
+            String type = e.getBoothType();
+
+            // Checking if current log is ENTRY
+            if (type.equals("ENTRY")) {
+
+                // Storing initial timestamp for journey start
+                prevTime.put(plate, e.getTimestamp());
+
+                // Storing initial location
+                prevLocation.put(plate, e.getLocation());
+
+                // Initializing over120 counter as 0
+                over120Count.put(plate, 0);
+
+                // Marking ticket status false initially
+                ticketed.put(plate, false);
+            }
+
+            // Checking if vehicle already exists in tracking map
+            else if (prevTime.containsKey(plate)) {
+
+                // Calculating time difference between current and previous booth
+                double timeDiff =
+                    e.getTimestamp() - prevTime.get(plate);
+
+                // Calculating distance difference
+                int distDiff =
+                    Math.abs(e.getLocation() - prevLocation.get(plate));
+
+                // Applying speed formula
+                double speed =
+                    (distDiff * 3600.0) / timeDiff;
+
+                // Checking if vehicle is not already ticketed
+                if (!ticketed.get(plate)) {
+
+                    // Rule 1: If speed >= 130 directly issue ticket
+                    if (speed >= 130.0) {
+
+                        // Updating ticket status
+                        ticketed.put(plate, true);
+                    }
+
+                    // Rule 2: Checking if speed crossed 120
+                    else if (speed >= 120.0) {
+
+                        // Incrementing count of over120 occurrences
+                        int cnt =
+                            over120Count.get(plate) + 1;
+
+                        // Updating map with new count
+                        over120Count.put(plate, cnt);
+
+                        // If crossed 120 two times then issue ticket
+                        if (cnt >= 2)
+
+                            // Updating ticket status
+                            ticketed.put(plate, true);
+                    }
+                }
+
+                // Updating latest timestamp
+                prevTime.put(plate, e.getTimestamp());
+
+                // Updating latest location
+                prevLocation.put(plate, e.getLocation());
+
+                // Checking if journey ended and vehicle was ticketed
+                if (type.equals("EXIT") && ticketed.get(plate))
+
+                    // Adding vehicle number into ticket list
+                    tickets.add(plate);
+            }
+        }
+
+        // Returning final ticket list
+        return tickets;
+    }
+}
+
+
+// Main class to execute all test cases
+public class Q6_TollBooth {
+
+    // Main method execution starts here
+    public static void main(String[] args) {
+
+        // Calling Task 1 test method
+        testTask1_BugFix();
+
+        // Calling Task 2 test method
+        testTask2_CountJourneys();
+
+        // Calling Task 3 test method
+        testTask3_CatchSpeeders();
+
+        // Printing success message
+        System.out.println("\nAll tasks PASSED!");
+    }
+
+    // Method to test bug fix in toString()
+    static void testTask1_BugFix() {
+
+        // Printing task heading
+        System.out.println("Task 1 (Bug Fix): LogEntry.toString() no longer crashes...");
+
+        // Creating sample log line
+        String logLine =
+            "44776.619 KTB918 310E MAINROAD";
+
+        // Creating object using constructor
+        LogEntry entry = new LogEntry(logLine);
+
+        // Validating timestamp
+        assert Math.abs(entry.getTimestamp() - 44776.619f) < 0.1
+            : "timestamp wrong";
+
+        // Validating license plate
+        assert entry.getLicensePlate().equals("KTB918")
+            : "plate wrong";
+
+        // Validating location
+        assert entry.getLocation() == 310
+            : "location wrong";
+
+        // Validating direction
+        assert entry.getDirection().equals("EAST")
+            : "direction wrong";
+
+        // Validating booth type
+        assert entry.getBoothType().equals("MAINROAD")
+            : "boothType wrong";
+
+        // Calling toString method
+        String result = entry.toString();
+
+        // Checking timestamp exists in output
+        assert result.contains("44776")
+            : "toString should contain timestamp";
+
+        // Checking plate exists in output
+        assert result.contains("KTB918")
+            : "toString should contain plate";
+
+        // Printing formatted object
+        System.out.println("  toString() = " + result);
+
+        // Printing pass message
+        System.out.println("  PASS");
+
+        // Creating second object for WEST direction test
+        LogEntry entry2 =
+            new LogEntry("52160.132 ABC123 400W ENTRY");
+
+        // Checking location
+        assert entry2.getLocation() == 400
+            : "location should be 400";
+
+        // Checking WEST direction
+        assert entry2.getDirection().equals("WEST")
+            : "direction should be WEST";
+
+        // Printing WEST validation
+        System.out.println(
+            "  West direction: loc=" +
+            entry2.getLocation() +
+            "  dir=" +
+            entry2.getDirection() +
+            "  PASS"
+        );
+    }
+
+    // Method to test journey counting logic
+    static void testTask2_CountJourneys() {
+
+        // Printing task heading
+        System.out.println("Task 2: countJourneys...");
+
+        // Creating sample logs
+        String[] lines = {
+            "90750.191 JOX304 250E ENTRY",
+            "91081.684 JOX304 260E MAINROAD",
+            "91082.101 THX138 110E ENTRY",
+            "91483.251 JOX304 270E MAINROAD",
+            "91873.920 THX138 120E MAINROAD",
+            "91874.493 JOX304 280E EXIT",
+            "91982.102 THX138 290E EXIT",
+            "92301.302 THX138 300E ENTRY",
+            "92371.302 THX138 310E EXIT"
+        };
+
+        // Creating LogFile object
+        LogFile lf = new LogFile(lines);
+
+        // Validating journey count
+        assert lf.countJourneys() == 3
+            : "expected 3, got " + lf.countJourneys();
+
+        // Printing success message
+        System.out.println(
+            "  countJourneys=" +
+            lf.countJourneys() +
+            "  PASS"
+        );
+    }
+
+    // Method to test speeding logic
+    static void testTask3_CatchSpeeders() {
+
+        // Printing task heading
+        System.out.println("Task 3: catchSpeeders...");
+
+        // Creating sample logs
+        String[] lines = {
+            "1000.000 TST001 100E ENTRY",
+            "1500.000 TST001 110E MAINROAD",
+            "2000.000 TST001 120E EXIT",
+
+            "1000.000 TST002 270W ENTRY",
+            "1275.000 TST002 260W EXIT",
+
+            "3000.000 TST003 200E ENTRY",
+            "3295.000 TST003 210E MAINROAD",
+            "3590.000 TST003 220E EXIT",
+        };
+
+        // Creating LogFile object
+        LogFile lf = new LogFile(lines);
+
+        // Calling speeding detection method
+        List<String> tickets = lf.catchSpeeders();
+
+        // Printing ticketed vehicles
+        System.out.println("  Tickets: " + tickets);
+
+        // Checking TST002 got ticket
+        assert tickets.contains("TST002")
+            : "TST002 should be ticketed";
+
+        // Checking TST003 got ticket
+        assert tickets.contains("TST003")
+            : "TST003 should be ticketed";
+
+        // Checking TST001 should not get ticket
+        assert !tickets.contains("TST001")
+            : "TST001 should NOT be ticketed";
+
+        // Printing success message
+        System.out.println(
+            "  TST001 safe, TST002+TST003 ticketed  PASS"
+        );
+    }
+}
+
+
+-----------------------------------------------------------------------------------------------
+
+
+
+import java.util.*; // Importing utility package for List, ArrayList, Objects, Arrays etc.
+
+// ╔══════════════════════════════════════════════════════════════════╗
+//  QUESTION 5 — STOCK COLLECTION
+// ╚══════════════════════════════════════════════════════════════════╝
+
+
+// Stock class represents one company stock using symbol and name
+class Stock {
+
+    // Variable to store stock symbol like AAPL
+    String symbol;
+
+    // Variable to store company name
+    String name;
+
+    // Constructor to initialize stock details
+    Stock(String sym, String name) {
+
+        // Assigning symbol value
+        this.symbol = sym;
+
+        // Assigning company name value
+        this.name = name;
+    }
+
+    // Overriding equals method to compare Stock objects logically
+    @Override
+    public boolean equals(Object o) {
+
+        // Checking if object is not instance of Stock
+        if (!(o instanceof Stock))
+
+            // Returning false because object type is different
+            return false;
+
+        // Typecasting Object into Stock object
+        Stock s = (Stock) o;
+
+        // Comparing both symbol and name values
+        return symbol.equals(s.symbol) && name.equals(s.name);
+    }
+
+    // Overriding hashCode because equals is overridden
+    @Override
+    public int hashCode() {
+
+        // Generating hash using symbol and name
+        return Objects.hash(symbol, name);
+    }
+}
+
+
+// PriceRecord class stores one stock price entry
+class PriceRecord {
+
+    // Storing Stock object
+    Stock stock;
+
+    // Storing stock price
+    int price;
+
+    // Storing date in YYYY-MM-DD format
+    String date;
+
+    // Constructor to initialize all fields
+    PriceRecord(Stock s, int p, String d) {
+
+        // Assigning stock object
+        stock = s;
+
+        // Assigning stock price
+        price = p;
+
+        // Assigning date
+        date = d;
+    }
+}
+
+
+// StockCollection class manages all records for one stock
+class StockCollection {
+
+    // Creating list to store all price records
+    List<PriceRecord> priceRecords = new ArrayList<>();
+
+    // Variable to store which stock this collection belongs to
+    Stock stock;
+
+    // Constructor to initialize stock collection
+    StockCollection(Stock s) {
+
+        // Assigning stock
+        stock = s;
+    }
+
+    // Method to add one price record
+    void addPriceRecord(PriceRecord pr) {
+
+        // Adding condition to validate stock consistency
+        if (!pr.stock.equals(stock))
+
+            // Throwing exception if stock mismatches
+            throw new IllegalArgumentException("Stock mismatch");
+
+        // Adding valid record into list
+        priceRecords.add(pr);
+    }
+
+    // Method to get total number of records
+    int getNumPriceRecords() {
+
+        // Returning size of list
+        return priceRecords.size();
+    }
+
+
+    // ── TASK 1: getMaxPrice() ───────────────────────────
+
+    // Method to return maximum stock price
+    int getMaxPrice() {
+
+        // Checking if list is empty to avoid crash
+        if (priceRecords.isEmpty())
+
+            // Returning -1 as sentinel value
+            return -1;
+
+        // Using stream to extract price values and find maximum
+        return priceRecords
+                .stream()
+                .mapToInt(r -> r.price)
+                .max()
+                .getAsInt();
+    }
+
+
+    // ── TASK 1: getMinPrice() ───────────────────────────
+
+    // Method to return minimum stock price
+    int getMinPrice() {
+
+        // Checking if list is empty
+        if (priceRecords.isEmpty())
+
+            // Returning -1 when no records available
+            return -1;
+
+        // Using stream to extract prices and find minimum
+        return priceRecords
+                .stream()
+                .mapToInt(r -> r.price)
+                .min()
+                .getAsInt();
+    }
+
+
+    // ── TASK 1: getAvgPrice() ───────────────────────────
+
+    // Method to calculate average stock price
+    double getAvgPrice() {
+
+        // Checking if list is empty to avoid division by zero
+        if (priceRecords.isEmpty())
+
+            // Returning -1.0 when no data available
+            return -1.0;
+
+        // Calculating total sum of prices using stream
+        double total =
+            priceRecords.stream()
+                        .mapToInt(r -> r.price)
+                        .sum();
+
+        // Returning average
+        return total / priceRecords.size();
+    }
+
+
+    // ── TASK 2: getBiggestChange() ───────────────────────────
+
+    // Method to find biggest price change between consecutive dates
+    Object[] getBiggestChange() {
+
+        // Checking if records are less than 2 because comparison needs at least 2 entries
+        if (priceRecords.size() < 2)
+
+            // Returning null because comparison not possible
+            return null;
+
+        // Creating new list copy so original list remains unchanged
+        List<PriceRecord> sorted =
+            new ArrayList<>(priceRecords);
+
+        // Sorting records based on date string
+        sorted.sort((r1, r2) ->
+            r1.date.compareTo(r2.date));
+
+        // Initializing biggest change using first two records
+        int biggestChange =
+            sorted.get(1).price - sorted.get(0).price;
+
+        // Storing earlier date
+        String earlierDate =
+            sorted.get(0).date;
+
+        // Storing later date
+        String laterDate =
+            sorted.get(1).date;
+
+        // Adding loop to iterate through consecutive pairs
+        for (int i = 1; i < sorted.size() - 1; i++) {
+
+            // Calculating price difference between consecutive records
+            int change =
+                sorted.get(i + 1).price -
+                sorted.get(i).price;
+
+            // Comparing absolute values because biggest magnitude is required
+            if (Math.abs(change) > Math.abs(biggestChange)) {
+
+                // Updating biggest change value
+                biggestChange = change;
+
+                // Updating earlier date
+                earlierDate = sorted.get(i).date;
+
+                // Updating later date
+                laterDate = sorted.get(i + 1).date;
+            }
+        }
+
+        // Returning result as Object array
+        return new Object[]{
+            biggestChange,
+            earlierDate,
+            laterDate
+        };
+    }
+}
+
+
+
+// ══════════════════════════════════════════════════════════════════
+//  MAIN CLASS
+// ══════════════════════════════════════════════════════════════════
+
+public class Q5_StockCollection {
+
+    // Main method execution starts here
+    public static void main(String[] args) {
+
+        // Calling Task 1 test method
+        testTask1_BugFix();
+
+        // Calling Task 2 test method
+        testTask2_BiggestChange();
+
+        // Printing final success message
+        System.out.println("\nAll tasks PASSED!");
+    }
+
+
+    // Helper method to create StockCollection using input array
+    static StockCollection makeCollection(
+        Stock stock,
+        Object[][] data
+    ) {
+
+        // Creating StockCollection object
+        StockCollection sc =
+            new StockCollection(stock);
+
+        // Adding loop to iterate through all rows
+        for (Object[] row : data)
+
+            // Creating PriceRecord object and adding into collection
+            sc.addPriceRecord(
+                new PriceRecord(
+                    stock,
+                    (int) row[0],
+                    (String) row[1]
+                )
+            );
+
+        // Returning populated collection
+        return sc;
+    }
+
+
+    // Method to test bug fix methods
+    static void testTask1_BugFix() {
+
+        // Printing heading
+        System.out.println(
+            "Task 1 (Bug Fix): getMaxPrice/getMinPrice/getAvgPrice on empty..."
+        );
+
+        // Creating Stock object
+        Stock stock =
+            new Stock("AAPL", "Apple Inc.");
+
+        // Creating empty stock collection
+        StockCollection empty =
+            new StockCollection(stock);
+
+        // Validating empty max result
+        assert empty.getMaxPrice() == -1
+            : "empty max expected -1";
+
+        // Validating empty min result
+        assert empty.getMinPrice() == -1
+            : "empty min expected -1";
+
+        // Validating empty average result
+        assert Math.abs(
+            empty.getAvgPrice() - (-1.0)
+        ) < 0.001
+            : "empty avg expected -1.0";
+
+        // Printing success output
+        System.out.println(
+            "  EMPTY → max=-1 min=-1 avg=-1.0 (no crashes)"
+        );
+
+
+        // Creating collection with sample data
+        StockCollection sc =
+            makeCollection(
+                stock,
+                new Object[][]{
+                    {110,"2023-06-29"},
+                    {112,"2023-07-01"},
+                    {90,"2023-06-28"},
+                    {105,"2023-07-06"}
+                }
+            );
+
+        // Validating maximum price
+        assert sc.getMaxPrice() == 112
+            : "max expected 112";
+
+        // Validating minimum price
+        assert sc.getMinPrice() == 90
+            : "min expected 90";
+
+        // Validating average price
+        assert Math.abs(
+            sc.getAvgPrice() - 104.25
+        ) < 0.01
+            : "avg expected 104.25";
+
+        // Printing final values
+        System.out.println(
+            "  DATA → max=" +
+            sc.getMaxPrice()
+            + "  min=" +
+            sc.getMinPrice()
+            + "  avg=" +
+            sc.getAvgPrice()
+            + "  PASS"
+        );
+    }
+
+
+    // Method to test biggest change logic
+    static void testTask2_BiggestChange() {
+
+        // Printing heading
+        System.out.println(
+            "Task 2: getBiggestChange..."
+        );
+
+        // Creating Stock object
+        Stock stock =
+            new Stock("AAPL", "Apple Inc.");
+
+        // Checking empty collection should return null
+        assert new StockCollection(stock)
+                .getBiggestChange() == null
+            : "empty → null";
+
+
+        // Creating first stock collection dataset
+        StockCollection sc1 =
+            makeCollection(
+                stock,
+                new Object[][]{
+                    {110,"2023-06-29"},
+                    {112,"2023-07-01"},
+                    {90,"2023-06-25"},
+                    {105,"2023-07-06"}
+                }
+            );
+
+        // Calling method
+        Object[] r1 =
+            sc1.getBiggestChange();
+
+        // Validating change amount
+        assert (int)r1[0] == 20
+            : "change expected 20";
+
+        // Validating earlier date
+        assert r1[1].equals("2023-06-25")
+            : "earlier expected 2023-06-25";
+
+        // Validating later date
+        assert r1[2].equals("2023-06-29")
+            : "later expected 2023-06-29";
+
+        // Printing result
+        System.out.println(
+            "  Test1: " +
+            Arrays.toString(r1) +
+            "  PASS"
+        );
+
+
+        // Creating second dataset
+        StockCollection sc2 =
+            makeCollection(
+                stock,
+                new Object[][]{
+                    {200,"2000-01-04"},
+                    {210,"1999-12-30"},
+                    {190,"2000-01-03"},
+                    {180,"2000-01-01"}
+                }
+            );
+
+        // Calling method
+        Object[] r2 =
+            sc2.getBiggestChange();
+
+        // Validating change amount
+        assert (int)r2[0] == -30
+            : "change expected -30";
+
+        // Validating earlier date
+        assert r2[1].equals("1999-12-30")
+            : "earlier expected 1999-12-30";
+
+        // Validating later date
+        assert r2[2].equals("2000-01-01")
+            : "later expected 2000-01-01";
+
+        // Printing result
+        System.out.println(
+            "  Test2: " +
+            Arrays.toString(r2) +
+            "  PASS"
+        );
+    }
+}
+
+
+
+----------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+import java.util.*; // Importing utility package for List, ArrayList, Random etc.
+
+// ╔══════════════════════════════════════════════════════════════════╗
+//  QUESTION 4 — RUN COLLECTION (OBSTACLE COURSE)
+// ╚══════════════════════════════════════════════════════════════════╝
+
+
+// Course class represents one obstacle course
+class Course {
+
+    // Variable to store course title
+    String title;
+
+    // Variable to store total number of obstacles
+    int obstacleCount;
+
+    // Constructor to initialize course details
+    Course(String title, int count) {
+
+        // Assigning course title
+        this.title = title;
+
+        // Assigning obstacle count
+        this.obstacleCount = count;
+    }
+
+    // Overriding equals method to compare Course objects logically
+    @Override
+    public boolean equals(Object o) {
+
+        // Checking if object is not instance of Course
+        if (!(o instanceof Course))
+
+            // Returning false because object type is different
+            return false;
+
+        // Typecasting Object into Course object
+        Course c = (Course) o;
+
+        // Comparing title and obstacle count
+        return c.title.equals(this.title)
+            && c.obstacleCount == this.obstacleCount;
+    }
+
+    // Overriding hashCode because equals is overridden
+    @Override
+    public int hashCode() {
+
+        // Generating hash code using title and obstacle count
+        return title.hashCode() * obstacleCount;
+    }
+}
+
+
+// Run class represents one attempt of completing the course
+class Run {
+
+    // Variable to store course object
+    Course course;
+
+    // Boolean to track whether run is completed
+    boolean complete;
+
+    // List to store obstacle completion times
+    List<Integer> obstacleTimes;
+
+    // Constructor to initialize run
+    Run(Course c) {
+
+        // Assigning course object
+        course = c;
+
+        // Initially marking run as incomplete
+        complete = false;
+
+        // Creating empty list for obstacle times
+        obstacleTimes = new ArrayList<>();
+    }
+
+
+    // Method to add obstacle completion time
+    void addObstacleTime(int t) {
+
+        // Checking if run already completed
+        if (complete)
+
+            // Throwing exception because no more obstacles can be added
+            throw new IllegalStateException("run is full");
+
+        // Adding obstacle time into list
+        obstacleTimes.add(t);
+
+        // Checking if all obstacles are completed
+        if (obstacleTimes.size() == course.obstacleCount)
+
+            // Marking run as complete
+            complete = true;
+    }
+
+
+    // Method to calculate total run time
+    int getRunTime() {
+
+        // Using stream to sum all obstacle times
+        return obstacleTimes
+                .stream()
+                .mapToInt(Integer::intValue)
+                .sum();
+    }
+}
+
+
+
+// RunCollection class manages all runs for one course
+class RunCollection {
+
+    // Variable to store course
+    Course course;
+
+    // List to store all runs
+    List<Run> runs = new ArrayList<>();
+
+    // Constructor to initialize RunCollection
+    RunCollection(Course c) {
+
+        // Assigning course
+        course = c;
+    }
+
+
+    // Method to add run into collection
+    void addRun(Run run) {
+
+        // Checking if run belongs to same course
+        if (!run.course.equals(course))
+
+            // Throwing exception if course mismatches
+            throw new IllegalArgumentException("Course mismatch");
+
+        // Adding run into list
+        runs.add(run);
+    }
+
+
+    // Method to return total number of runs
+    int getNumRuns() {
+
+        // Returning list size
+        return runs.size();
+    }
+
+
+
+    // ── TASK 1: personalBest() ──────────────────────────
+
+    // Method to find best completed run using stream
+    public int personalBest() {
+
+        // Using stream to process all runs
+        return runs.stream()
+
+            // Filtering only completed runs
+            .filter(r -> r.complete)
+
+            // Converting runs into runtime values
+            .mapToInt(r -> r.getRunTime())
+
+            // Finding minimum runtime
+            .min()
+
+            // Returning Integer.MAX_VALUE if no completed run exists
+            .orElse(Integer.MAX_VALUE);
+    }
+
+
+
+    // Alternative implementation using for loop
+    public int personalBest_ForLoop() {
+
+        // Initializing best time with maximum integer value
+        int best = Integer.MAX_VALUE;
+
+        // Adding loop to iterate through all runs
+        for (Run run : runs) {
+
+            // Checking if run is incomplete
+            if (!run.complete)
+
+                // Skipping incomplete runs
+                continue;
+
+            // Comparing current runtime with best runtime
+            if (run.getRunTime() < best)
+
+                // Updating best runtime
+                best = run.getRunTime();
+        }
+
+        // Returning final best runtime
+        return best;
+    }
+
+
+
+    // ── TASK 2: bestOfBests() ──────────────────────────
+
+    // Method to calculate best obstacle times combined from all runs
+    public int bestOfBests() {
+
+        // Variable to store final total
+        int total = 0;
+
+        // Outer loop to iterate through obstacle positions
+        for (int i = 0; i < course.obstacleCount; i++) {
+
+            // Initializing minimum time for current obstacle
+            int obstacleMin = Integer.MAX_VALUE;
+
+            // Inner loop to iterate through all runs
+            for (Run run : runs) {
+
+                // Guard condition to avoid IndexOutOfBoundsException
+                if (run.obstacleTimes.size() > i) {
+
+                    // Updating minimum obstacle time
+                    obstacleMin =
+                        Math.min(
+                            obstacleMin,
+                            run.obstacleTimes.get(i)
+                        );
+                }
+            }
+
+            // Adding best obstacle time into total
+            total += obstacleMin;
+        }
+
+        // Returning final total
+        return total;
+    }
+
+
+
+    // ── TASK 3: chanceOfPersonalBest() ──────────────────────────
+
+    // Monte Carlo simulation method
+    public double chanceOfPersonalBest(Run inProgress) {
+
+        // Getting personal best runtime
+        int personalBest = personalBest();
+
+        // Getting total obstacle count
+        int totalObstacles = course.obstacleCount;
+
+
+        // Creating historical data structure
+        List<List<Integer>> historical =
+            new ArrayList<>();
+
+
+        // Creating list for each obstacle
+        for (int i = 0; i < totalObstacles; i++)
+
+            // Adding empty list for obstacle i
+            historical.add(new ArrayList<>());
+
+
+        // Looping through all runs
+        for (Run run : runs)
+
+            // Looping through obstacle times of current run
+            for (int i = 0; i < run.obstacleTimes.size(); i++)
+
+                // Storing historical obstacle times
+                historical.get(i).add(
+                    run.obstacleTimes.get(i)
+                );
+
+
+        // Getting current runtime of in-progress run
+        int currentTotal =
+            inProgress.getRunTime();
+
+        // Getting completed obstacle count
+        int completedObstacles =
+            inProgress.obstacleTimes.size();
+
+
+        // Checking if already slower than personal best
+        if (currentTotal > personalBest)
+
+            // Returning 0 probability
+            return 0.0;
+
+
+        // Setting total simulation count
+        int trials = 10000;
+
+        // Variable to count successful simulations
+        int success = 0;
+
+        // Creating Random object
+        Random random = new Random();
+
+
+        // Loop for running Monte Carlo trials
+        for (int t = 0; t < trials; t++) {
+
+            // Initializing simulated total with current total
+            int simTotal = currentTotal;
+
+
+            // Looping through remaining obstacles
+            for (int j = completedObstacles;
+                 j < totalObstacles;
+                 j++) {
+
+                // Selecting random historical time
+                simTotal +=
+                    historical.get(j).get(
+                        random.nextInt(
+                            historical.get(j).size()
+                        )
+                    );
+
+                // Checking if simulation already exceeded personal best
+                if (simTotal > personalBest)
+
+                    // Stopping current simulation early
+                    break;
+            }
+
+
+            // Checking if simulation beat personal best
+            if (simTotal <= personalBest)
+
+                // Incrementing success counter
+                success++;
+        }
+
+
+        // Returning probability
+        return success / (double) trials;
+    }
+}
+
+
+
+// ══════════════════════════════════════════════════════════════════
+//  MAIN CLASS
+// ══════════════════════════════════════════════════════════════════
+
+public class Q4_RunCollection {
+
+    // Main method execution starts here
+    public static void main(String[] args) {
+
+        // Calling Task 1 test method
+        testTask1_BugFix();
+
+        // Calling Task 2 test method
+        testTask2_BestOfBests();
+
+        // Calling Task 3 test method
+        testTask3_ChanceOfPersonalBest();
+
+        // Printing final success message
+        System.out.println("\nAll tasks PASSED!");
+    }
+
+
+
+    // Helper method to create RunCollection using test data
+    static RunCollection makeRC(
+        Course course,
+        int[][] data
+    ) {
+
+        // Creating RunCollection object
+        RunCollection rc =
+            new RunCollection(course);
+
+
+        // Looping through all run data
+        for (int[] times : data) {
+
+            // Creating Run object
+            Run run =
+                new Run(course);
+
+            // Looping through obstacle times
+            for (int t : times)
+
+                // Adding obstacle time into run
+                run.addObstacleTime(t);
+
+            // Adding run into collection
+            rc.addRun(run);
+        }
+
+        // Returning populated collection
+        return rc;
+    }
+
+
+
+    // Method to test personalBest bug fix
+    static void testTask1_BugFix() {
+
+        // Printing heading
+        System.out.println(
+            "Task 1 (Bug Fix): personalBest..."
+        );
+
+        // Creating Course object
+        Course c =
+            new Course("Test", 4);
+
+
+        // Creating RunCollection with sample data
+        RunCollection rc =
+            makeRC(
+                c,
+                new int[][]{
+                    {3,4,5,6},
+                    {4,4,4,5},
+                    {4,5,4,6},
+                    {5,5,3}
+                }
+            );
+
+
+        // Validating stream implementation
+        assert rc.personalBest() == 17
+            : "stream: expected 17, got "
+              + rc.personalBest();
+
+        // Validating for-loop implementation
+        assert rc.personalBest_ForLoop() == 17
+            : "forLoop: expected 17";
+
+
+        // Printing result
+        System.out.println(
+            "  stream=" +
+            rc.personalBest()
+            + "  forLoop=" +
+            rc.personalBest_ForLoop()
+            + "  (not 13 from incomplete run)  PASS"
+        );
+    }
+
+
+
+    // Method to test bestOfBests logic
+    static void testTask2_BestOfBests() {
+
+        // Printing heading
+        System.out.println(
+            "Task 2: bestOfBests..."
+        );
+
+        // Creating Course object
+        Course c =
+            new Course("Test", 4);
+
+
+        // Creating RunCollection
+        RunCollection rc =
+            makeRC(
+                c,
+                new int[][]{
+                    {3,4,5,6},
+                    {4,4,4,5},
+                    {4,5,4,6},
+                    {5,5,3}
+                }
+            );
+
+
+        // Validating bestOfBests value
+        assert rc.bestOfBests() == 15
+            : "expected 15, got "
+              + rc.bestOfBests();
+
+
+        // Printing result
+        System.out.println(
+            "  bestOfBests=" +
+            rc.bestOfBests()
+            + "  (3+4+3+5=15)  PASS"
+        );
+    }
+
+
+
+    // Method to test Monte Carlo simulation
+    static void testTask3_ChanceOfPersonalBest() {
+
+        // Printing heading
+        System.out.println(
+            "Task 3: chanceOfPersonalBest (Monte Carlo)..."
+        );
+
+        // Creating Course object
+        Course c =
+            new Course("Test", 10);
+
+
+        // Creating historical dataset
+        int[][] data = {
+            {32,37},
+            {31,29,34,25,25,39},
+            {25,34,38,24,26,39,33},
+            {39,21,39,34,39,29,31,22,28,20},
+            {23,22,35,33,36,21,29,37,24,34},
+            {28,34,28,22,40,28,31,33,25,20},
+            {20,38,40,28,34,22},
+            {36,39,20,32,38,24,22},
+            {40,20,21,37,32,30,40,25,37,30},
+            {21,35,30,37,32,40,26,29,29}
+        };
+
+
+        // Creating RunCollection object
+        RunCollection rc =
+            makeRC(c, data);
+
+
+        // Creating in-progress run
+        Run inProgress =
+            new Run(c);
+
+        // Adding first obstacle time
+        inProgress.addObstacleTime(19);
+
+        // Adding second obstacle time
+        inProgress.addObstacleTime(19);
+
+        // Adding third obstacle time
+        inProgress.addObstacleTime(19);
+
+
+        // Calling Monte Carlo simulation
+        double chance =
+            rc.chanceOfPersonalBest(inProgress);
+
+
+        // Validating probability range
+        assert chance >= 0.85
+            && chance <= 1.0
+            : "expected 0.85-1.0, got "
+              + chance;
+
+
+        // Printing probability result
+        System.out.println(
+            "  chanceOfPersonalBest=" +
+            String.format("%.4f", chance)
+            + "  (~0.93 expected)  PASS"
+        );
+    }
+}
+
+
+
+
+------------------------------------------------------------------------------------------------------
+
+
+
+
+
+import java.util.*; // Importing utility package for List, Map, HashMap, ArrayList etc.
+
+// ╔══════════════════════════════════════════════════════════════════╗
+//  QUESTION 3 — GYM MEMBERSHIP SYSTEM
+// ╚══════════════════════════════════════════════════════════════════╝
+
+
+// Enum to define membership types
+enum MembershipStatus {
+
+    // Bronze membership type
+    BRONZE,
+
+    // Silver membership type
+    SILVER,
+
+    // Gold membership type
+    GOLD
+}
+
+
+
+// Workout class represents one gym session
+class Workout {
+
+    // Variable to store workout ID
+    private int id;
+
+    // Variable to store workout start time
+    private int startTime;
+
+    // Variable to store workout end time
+    private int endTime;
+
+
+    // Constructor to initialize workout details
+    Workout(int id, int start, int end) {
+
+        // Assigning workout ID
+        this.id = id;
+
+        // Assigning start time
+        startTime = start;
+
+        // Assigning end time
+        endTime = end;
+    }
+
+
+    // Getter method for workout ID
+    public int getId() {
+
+        // Returning ID
+        return id;
+    }
+
+
+    // Getter method for start time
+    public int getStartTime() {
+
+        // Returning start time
+        return startTime;
+    }
+
+
+    // Getter method for end time
+    public int getEndTime() {
+
+        // Returning end time
+        return endTime;
+    }
+
+
+    // Method to calculate workout duration
+    public int getDuration() {
+
+        // Returning difference between end and start time
+        return endTime - startTime;
+    }
+}
+
+
+
+// Member class represents one gym member
+class Member {
+
+    // Variable to store member ID
+    public int memberId;
+
+    // Variable to store member name
+    public String name;
+
+    // Variable to store membership type
+    public MembershipStatus membershipStatus;
+
+
+    // Constructor to initialize member details
+    Member(int id, String name, MembershipStatus status) {
+
+        // Assigning member ID
+        this.memberId = id;
+
+        // Assigning member name
+        this.name = name;
+
+        // Assigning membership status
+        this.membershipStatus = status;
+    }
+
+
+
+    // ── TASK 1: equals() bug fix ───────────────────────
+
+    // Overriding equals method
+    @Override
+    public boolean equals(Object o) {
+
+        // Checking if both references point to same object
+        if (this == o)
+
+            // Returning true because same object
+            return true;
+
+        // Checking if object is not instance of Member
+        if (!(o instanceof Member))
+
+            // Returning false because types are different
+            return false;
+
+        // Typecasting Object into Member
+        Member m = (Member) o;
+
+        // Comparing members using memberId
+        return this.memberId == m.memberId;
+    }
+
+
+
+    // Overriding hashCode because equals is overridden
+    @Override
+    public int hashCode() {
+
+        // Generating hash using memberId
+        return Integer.hashCode(memberId);
+    }
+
+
+
+    // Overriding toString for readable output
+    @Override
+    public String toString() {
+
+        // Returning formatted member details
+        return "Member ID: "
+            + memberId
+            + ", Name: "
+            + name
+            + ", Status: "
+            + membershipStatus;
+    }
+}
+
+
+
+// Class to store membership statistics
+class MembershipStatistics {
+
+    // Variable to store total members
+    public int totalMembers;
+
+    // Variable to store total paid members
+    public int totalPaidMembers;
+
+    // Variable to store conversion percentage
+    public double conversionRate;
+
+
+    // Constructor to initialize statistics
+    MembershipStatistics(int t, int p, double r) {
+
+        // Assigning total members
+        totalMembers = t;
+
+        // Assigning paid members count
+        totalPaidMembers = p;
+
+        // Assigning conversion rate
+        conversionRate = r;
+    }
+}
+
+
+
+// Membership class manages all members and workouts
+class Membership {
+
+    // List to store all members
+    public List<Member> members =
+        new ArrayList<>();
+
+    // Map to store workouts against member ID
+    Map<Integer, List<Workout>> workoutsByMember =
+        new HashMap<>();
+
+
+    // Method to add member into list
+    void addMember(Member m) {
+
+        // Adding member into members list
+        members.add(m);
+    }
+
+
+
+    // Method to update membership status
+    void updateMembership(
+        int memberId,
+        MembershipStatus status
+    ) {
+
+        // Adding loop to iterate through all members
+        for (Member m : members)
+
+            // Checking if memberId matches
+            if (m.memberId == memberId) {
+
+                // Updating membership status
+                m.membershipStatus = status;
+
+                // Stopping loop after update
+                break;
+            }
+    }
+
+
+
+    // Method to calculate membership statistics
+    MembershipStatistics getMembershipStatistics() {
+
+        // Variable to count premium members
+        int premium = 0;
+
+
+        // Looping through all members
+        for (Member m : members)
+
+            // Checking if member is GOLD or SILVER
+            if (m.membershipStatus == MembershipStatus.GOLD
+             || m.membershipStatus == MembershipStatus.SILVER)
+
+                // Incrementing premium count
+                premium++;
+
+
+        // Calculating conversion rate
+        double rate =
+            members.size() == 0
+            ? 0.0
+            : (premium / (double) members.size()) * 100.0;
+
+
+        // Returning statistics object
+        return new MembershipStatistics(
+            members.size(),
+            premium,
+            rate
+        );
+    }
+
+
+
+    // ── TASK 2.1: addWorkout() ───────────────────────
+
+    // Method to add workout for a member
+    public void addWorkout(
+        Integer memId,
+        Workout wk
+    ) {
+
+        // Looping through all members
+        for (Member m : members) {
+
+            // Checking if member exists
+            if (m.memberId == memId) {
+
+                // Adding workout into map
+                workoutsByMember
+                    .computeIfAbsent(
+                        memId,
+                        k -> new ArrayList<>()
+                    )
+                    .add(wk);
+
+                // Stopping method after successful addition
+                return;
+            }
+        }
+
+        // If member not found then silently ignore
+    }
+
+
+
+    // ── TASK 2.2: getAverageWorkoutDurations() ───────────────────────
+
+    // Method to calculate average workout duration
+    public Map<Integer, Double>
+    getAverageWorkoutDurations() {
+
+        // Creating result map
+        Map<Integer, Double> avgByMember =
+            new HashMap<>();
+
+
+        // Looping through map entries
+        for (Map.Entry<Integer, List<Workout>> entry
+                : workoutsByMember.entrySet()) {
+
+            // Variable to store total duration
+            double total = 0.0;
+
+
+            // Looping through workouts of current member
+            for (Workout w : entry.getValue())
+
+                // Adding workout duration
+                total += w.getDuration();
+
+
+            // Calculating and storing average duration
+            avgByMember.put(
+                entry.getKey(),
+                total / entry.getValue().size()
+            );
+        }
+
+        // Returning final map
+        return avgByMember;
+    }
+
+
+
+    // ── TASK 3: getPaymentDues() ───────────────────────
+
+    // Method to calculate payment due for each member
+    public Map<Integer, Double> getPaymentDues() {
+
+        // Creating result map
+        Map<Integer, Double> dueByMember =
+            new HashMap<>();
+
+
+        // Looping through all members
+        for (Member member : members) {
+
+            // Variables to store free workout limit and rate
+            int freeLimit, rate;
+
+
+            // Checking if membership is BRONZE
+            if (member.membershipStatus
+                    == MembershipStatus.BRONZE) {
+
+                // Setting bronze rules
+                freeLimit = 1;
+                rate = 10;
+            }
+
+            // Checking if membership is SILVER
+            else if (member.membershipStatus
+                        == MembershipStatus.SILVER) {
+
+                // Setting silver rules
+                freeLimit = 3;
+                rate = 8;
+            }
+
+            // Otherwise membership is GOLD
+            else {
+
+                // Setting gold rules
+                freeLimit = 5;
+                rate = 6;
+            }
+
+
+            // Fetching workouts for member
+            List<Workout> workouts =
+                workoutsByMember.getOrDefault(
+                    member.memberId,
+                    new ArrayList<>()
+                );
+
+
+            // Variable to store total due
+            double totalDue = 0.0;
+
+
+            // Loop starts after free workout limit
+            for (int i = freeLimit;
+                 i < workouts.size();
+                 i++) {
+
+                // Calculating hours using ceiling division
+                int hours =
+                    (workouts.get(i).getDuration() + 59)
+                    / 60;
+
+                // Adding charges into total due
+                totalDue += hours * rate;
+            }
+
+
+            // Storing final due amount
+            dueByMember.put(
+                member.memberId,
+                totalDue
+            );
+        }
+
+        // Returning dues map
+        return dueByMember;
+    }
+}
+
+
+
+// ══════════════════════════════════════════════════════════════════
+//  MAIN CLASS
+// ══════════════════════════════════════════════════════════════════
+
+public class Q3_GymCollection {
+
+    // Main method execution starts here
+    public static void main(String[] args) {
+
+        // Calling Task 1 test
+        testTask1_BugFix();
+
+        // Calling Task 2 test
+        testTask2_AddWorkoutAndAverage();
+
+        // Calling Task 3 test
+        testTask3_PaymentDues();
+
+        // Printing final success message
+        System.out.println("\nAll tasks PASSED!");
+    }
+
+
+
+    // Method to test equals() bug fix
+    static void testTask1_BugFix() {
+
+        // Printing heading
+        System.out.println(
+            "Task 1 (Bug Fix): Member.equals()..."
+        );
+
+
+        // Creating member object
+        Member m1 =
+            new Member(
+                1,
+                "John Doe",
+                MembershipStatus.BRONZE
+            );
+
+        // Creating second member with same ID
+        Member m2 =
+            new Member(
+                1,
+                "John Doe",
+                MembershipStatus.BRONZE
+            );
+
+        // Creating third member with different ID
+        Member m3 =
+            new Member(
+                2,
+                "Jane Doe",
+                MembershipStatus.GOLD
+            );
+
+
+        // Checking same member IDs should be equal
+        assert m1.equals(m2)
+            : "same memberId → should be equal";
+
+        // Checking different member IDs should not be equal
+        assert !m1.equals(m3)
+            : "different memberId → should NOT be equal";
+
+
+        // Creating member list
+        List<Member> list =
+            new ArrayList<>();
+
+        // Adding member into list
+        list.add(m1);
+
+
+        // Validating equals method with list object
+        assert list.get(0).equals(m2)
+            : "list.get(0).equals(testMember) should be true";
+
+
+        // Printing result
+        System.out.println(
+            "  m1.equals(m2)=" +
+            m1.equals(m2)
+            + "  m1.equals(m3)=" +
+            m1.equals(m3)
+            + "  PASS"
+        );
+    }
+
+
+
+    // Method to test addWorkout and average logic
+    static void testTask2_AddWorkoutAndAverage() {
+
+        // Printing heading
+        System.out.println(
+            "Task 2: addWorkout + getAverageWorkoutDurations..."
+        );
+
+
+        // Creating Membership object
+        Membership gym =
+            new Membership();
+
+
+        // Adding gym members
+        gym.addMember(
+            new Member(
+                12,
+                "John",
+                MembershipStatus.SILVER
+            )
+        );
+
+        gym.addMember(
+            new Member(
+                22,
+                "Alex",
+                MembershipStatus.BRONZE
+            )
+        );
+
+        gym.addMember(
+            new Member(
+                31,
+                "Marie",
+                MembershipStatus.GOLD
+            )
+        );
+
+        gym.addMember(
+            new Member(
+                37,
+                "George",
+                MembershipStatus.SILVER
+            )
+        );
+
+
+        // Adding workouts for member 12
+        gym.addWorkout(
+            12,
+            new Workout(11, 10, 20)
+        );
+
+        gym.addWorkout(
+            12,
+            new Workout(47, 100, 155)
+        );
+
+        gym.addWorkout(
+            12,
+            new Workout(78, 1000, 1010)
+        );
+
+
+        // Adding workouts for member 22
+        gym.addWorkout(
+            22,
+            new Workout(24, 15, 35)
+        );
+
+        gym.addWorkout(
+            22,
+            new Workout(56, 120, 200)
+        );
+
+
+        // Adding workouts for member 31
+        gym.addWorkout(
+            31,
+            new Workout(32, 45, 90)
+        );
+
+        gym.addWorkout(
+            31,
+            new Workout(62, 300, 400)
+        );
+
+
+        // Adding workout for invalid member
+        gym.addWorkout(
+            99,
+            new Workout(99, 0, 60)
+        );
+
+
+        // Fetching average durations
+        Map<Integer, Double> avg =
+            gym.getAverageWorkoutDurations();
+
+
+        // Validating averages
+        assert Math.abs(avg.get(12) - 25.0) < 0.1
+            : "M12 expected 25.0";
+
+        assert Math.abs(avg.get(22) - 50.0) < 0.1
+            : "M22 expected 50.0";
+
+        assert Math.abs(avg.get(31) - 72.5) < 0.1
+            : "M31 expected 72.5";
+
+        assert !avg.containsKey(37)
+            : "M37 should NOT appear";
+
+
+        // Printing averages
+        System.out.println(
+            "  M12=" + avg.get(12)
+            + "  M22=" + avg.get(22)
+            + "  M31=" + avg.get(31)
+            + "  M37 absent="
+            + !avg.containsKey(37)
+            + "  PASS"
+        );
+    }
+
+
+
+    // Method to test payment due logic
+    static void testTask3_PaymentDues() {
+
+        // Printing heading
+        System.out.println(
+            "Task 3: getPaymentDues..."
+        );
+
+
+        // Creating Membership object
+        Membership gym =
+            new Membership();
+
+
+        // Adding Bronze member
+        gym.addMember(
+            new Member(
+                1,
+                "Bronze Bob",
+                MembershipStatus.BRONZE
+            )
+        );
+
+
+        // Adding workouts for Bronze Bob
+        gym.addWorkout(1,
+            new Workout(1, 0, 60));
+
+        gym.addWorkout(1,
+            new Workout(2, 0, 80));
+
+        gym.addWorkout(1,
+            new Workout(3, 0, 30));
+
+
+        // Adding Silver member
+        gym.addMember(
+            new Member(
+                2,
+                "Silver Sue",
+                MembershipStatus.SILVER
+            )
+        );
+
+
+        // Adding workouts for Silver Sue
+        gym.addWorkout(2,
+            new Workout(1, 0, 60));
+
+        gym.addWorkout(2,
+            new Workout(2, 0, 60));
+
+        gym.addWorkout(2,
+            new Workout(3, 0, 60));
+
+        gym.addWorkout(2,
+            new Workout(4, 0, 120));
+
+        gym.addWorkout(2,
+            new Workout(5, 0, 61));
+
+
+        // Adding Gold member
+        gym.addMember(
+            new Member(
+                3,
+                "Gold Gary",
+                MembershipStatus.GOLD
+            )
+        );
+
+
+        // Adding 5 free workouts using loop
+        for (int i = 1; i <= 5; i++)
+
+            // Adding workout
+            gym.addWorkout(
+                3,
+                new Workout(i, 0, 60)
+            );
+
+
+        // Adding paid workout
+        gym.addWorkout(
+            3,
+            new Workout(6, 0, 90)
+        );
+
+
+        // Adding another Gold member
+        gym.addMember(
+            new Member(
+                4,
+                "Gold Grace",
+                MembershipStatus.GOLD
+            )
+        );
+
+
+        // Adding free workouts for Grace
+        for (int i = 1; i <= 4; i++)
+
+            // Adding workout
+            gym.addWorkout(
+                4,
+                new Workout(i, 0, 60)
+            );
+
+
+        // Fetching dues map
+        Map<Integer, Double> due =
+            gym.getPaymentDues();
+
+
+        // Validating dues
+        assert Math.abs(due.get(1) - 30.0) < 0.01
+            : "Bob expected $30";
+
+        assert Math.abs(due.get(2) - 32.0) < 0.01
+            : "Sue expected $32";
+
+        assert Math.abs(due.get(3) - 12.0) < 0.01
+            : "Gary expected $12";
+
+        assert Math.abs(due.get(4) - 0.0) < 0.01
+            : "Grace expected $0";
+
+
+        // Printing dues
+        System.out.println(
+            "  Bob=$" + due.get(1)
+            + "  Sue=$" + due.get(2)
+            + "  Gary=$" + due.get(3)
+            + "  Grace=$" + due.get(4)
+            + "  PASS"
+        );
+    }
+}
+
+
+
+
+
+--------------------------------------------------------------------------------------------------------
+
+
+
+
+// Importing all utility classes like List, Map, HashMap, ArrayList, Comparator etc.
+import java.util.*;
+
+// ╔══════════════════════════════════════════════════════════════════╗
+//  QUESTION 2 — PAYMENT TRANSACTION MONITORING
+// ╚══════════════════════════════════════════════════════════════════╝
+
+
+// Creating an enum to represent only 2 valid transaction types
+enum TransactionType {
+    
+    // CREDIT means money added into account
+    CREDIT,
+
+    // DEBIT means money deducted from account
+    DEBIT
+}
+
+
+// Transaction class represents one banking transaction
+class Transaction {
+
+    // transactionId = unique id of transaction
+    // accountId = account to which transaction belongs
+    int transactionId, accountId;
+
+    // type stores whether transaction is CREDIT or DEBIT
+    TransactionType type;
+
+    // amount stores money involved in transaction
+    double amount;
+
+    // timestampSec stores time in unix seconds
+    long timestampSec;
+
+    
+    // Constructor to initialise transaction object
+    Transaction(int tid, int aid, TransactionType type, double amount, long ts) {
+
+        // Assigning constructor values to object variables
+        this.transactionId = tid;
+        this.accountId = aid;
+
+        this.type = type;
+        this.amount = amount;
+
+        this.timestampSec = ts;
+    }
+
+    
+    // Getter method to return accountId
+    public int getAccountId() {
+        return accountId;
+    }
+
+    
+    // Getter method to return transaction type
+    public TransactionType getType() {
+        return type;
+    }
+
+    
+    // Getter method to return amount
+    public double getAmount() {
+        return amount;
+    }
+
+    
+    // Getter method to return timestamp
+    public long getTimestampSec() {
+        return timestampSec;
+    }
+}
+
+
+// AccountManager class manages all account transactions
+class AccountManager {
+
+    // Creating a list to store all transactions
+    List<Transaction> transactions = new ArrayList<>();
+
+
+    // Method to add new transaction into list
+    void addTransaction(Transaction tx) {
+
+        // Adding transaction object into transaction list
+        transactions.add(tx);
+    }
+
+
+    // Method to calculate account balance
+    public double getBalance(int accountId) {
+
+        // Variable to store final balance
+        double balance = 0.0;
+
+        
+        // Adding for loop to iterate through all transactions
+        for (Transaction tx : transactions) {
+
+            
+            // Adding if condition to check whether transaction belongs to requested account
+            if (tx.accountId == accountId) {
+
+                
+                // Adding if condition to check if transaction is CREDIT
+                if (tx.type == TransactionType.CREDIT)
+
+                    // CREDIT means money added to balance
+                    balance += tx.amount;
+
+                else
+
+                    // DEBIT means money deducted from balance
+                    balance -= tx.amount;
+            }
+        }
+
+        
+        // Returning final calculated balance
+        return balance;
+    }
+
+
+    // Method to calculate average transaction amount per account
+    public Map<Integer, Double> getAverageTransactionAmountByAccount() {
+
+        
+        // Creating map to store total amount per account
+        Map<Integer, Double> sumMap = new HashMap<>();
+
+        
+        // Creating map to store transaction count per account
+        Map<Integer, Integer> countMap = new HashMap<>();
+
+
+        // Adding for loop to iterate through all transactions
+        for (Transaction tx : transactions) {
+
+            
+            // Adding current transaction amount into sumMap
+            sumMap.put(
+                tx.getAccountId(),
+
+                
+                // getOrDefault returns existing sum else 0.0 if key not present
+                sumMap.getOrDefault(tx.getAccountId(), 0.0)
+                        + tx.getAmount()
+            );
+
+
+            
+            // Increasing transaction count for that account
+            countMap.put(
+                tx.getAccountId(),
+
+                
+                // getOrDefault returns existing count else 0
+                countMap.getOrDefault(tx.getAccountId(), 0)
+                        + 1
+            );
+        }
+
+
+        
+        // Creating final result map to store averages
+        Map<Integer, Double> result = new HashMap<>();
+
+
+        
+        // Adding for loop to iterate through all account ids in sumMap
+        for (int id : sumMap.keySet()) {
+
+            
+            // Calculating average = total amount / count
+            result.put(
+                id,
+                sumMap.get(id) / countMap.get(id)
+            );
+        }
+
+
+        
+        // Returning final average map
+        return result;
+    }
+
+
+    // Method to calculate transaction fees for each account
+    public Map<Integer, Double> getTransactionFees() {
+
+
+        
+        // STEP 1 : Group transactions account-wise
+        
+        // Creating map where:
+        // key   = accountId
+        // value = list of transactions of that account
+        Map<Integer, List<Transaction>> txByAccount = new HashMap<>();
+
+
+        
+        // Adding for loop to iterate through all transactions
+        for (Transaction tx : transactions) {
+
+            
+            // computeIfAbsent creates new ArrayList if account key not present
+            // then adds transaction into that account list
+            txByAccount
+                    .computeIfAbsent(
+                            tx.getAccountId(),
+                            k -> new ArrayList<>()
+                    )
+                    .add(tx);
+        }
+
+
+        
+        // Creating final fees map
+        Map<Integer, Double> fees = new HashMap<>();
+
+
+        
+        // Adding for loop to iterate through each account entry
+        for (Map.Entry<Integer, List<Transaction>> entry
+                : txByAccount.entrySet()) {
+
+            
+            // Getting all transactions of current account
+            List<Transaction> accountTxs = entry.getValue();
+
+
+            
+            // STEP 2 : Sorting transactions by timestamp
+            
+            // Sorting because input transactions may come in random order
+            accountTxs.sort(
+                    Comparator.comparingLong(
+                            Transaction::getTimestampSec
+                    )
+            );
+
+
+            
+            // Variable to store total fee of current account
+            double totalFee = 0.0;
+
+
+            
+            // STEP 3 : Applying fee rules
+            
+            // Adding for loop using index because fee depends on transaction position
+            for (int i = 0; i < accountTxs.size(); i++) {
+
+
+                
+                // Adding if condition to skip first 3 free transactions
+                if (i >= 3) {
+
+                    
+                    // Fetching current transaction
+                    Transaction tx = accountTxs.get(i);
+
+
+                    
+                    // Adding ternary operator to apply fee rule:
+                    // CREDIT = $1
+                    // DEBIT  = $2
+                    totalFee +=
+                            (tx.getType() == TransactionType.CREDIT)
+                                    ? 1.0
+                                    : 2.0;
+                }
+            }
+
+
+            
+            // Storing final fee of current account into map
+            fees.put(entry.getKey(), totalFee);
+        }
+
+
+        
+        // Returning final fees map
+        return fees;
+    }
+}
+
+
+
+// Main class
+public class Q2_Payment {
+
+    
+    // Main method execution starts from here
+    public static void main(String[] args) {
+
+        
+        // Calling Task 1 test method
+        testTask1_BugFix();
+
+        
+        // Calling Task 2 test method
+        testTask2_AverageAmount();
+
+        
+        // Calling Task 3 test method
+        testTask3_Fees();
+
+
+        
+        // Printing success message
+        System.out.println("\nAll 3 tasks PASSED!");
+    }
+
+
+
+    
+    // Method to test getBalance()
+    static void testTask1_BugFix() {
+
+        
+        // Printing task heading
+        System.out.println("Task 1 (Bug Fix): getBalance...");
+
+
+        
+        // Creating AccountManager object
+        AccountManager mgr = new AccountManager();
+
+
+        
+        // Adding transactions into manager
+        mgr.addTransaction(
+                new Transaction(
+                        201,
+                        1,
+                        TransactionType.CREDIT,
+                        50.0,
+                        2000
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        202,
+                        2,
+                        TransactionType.CREDIT,
+                        80.0,
+                        2005
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        203,
+                        1,
+                        TransactionType.DEBIT,
+                        10.0,
+                        2010
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        204,
+                        2,
+                        TransactionType.DEBIT,
+                        5.5,
+                        2015
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        205,
+                        2,
+                        TransactionType.DEBIT,
+                        14.5,
+                        2020
+                )
+        );
+
+
+        
+        // Calling getBalance for account 1
+        double bal1 = mgr.getBalance(1);
+
+        
+        // Calling getBalance for account 2
+        double bal2 = mgr.getBalance(2);
+
+
+        
+        // Assertion to validate balance of account 1
+        assert Math.abs(bal1 - 40.0) < 0.01
+                : "A1 expected 40.0";
+
+
+        
+        // Assertion to validate balance of account 2
+        assert Math.abs(bal2 - 60.0) < 0.01
+                : "A2 expected 60.0";
+
+
+        
+        // Printing final output
+        System.out.println(
+                "  A1=" + bal1 +
+                "  A2=" + bal2 +
+                "  PASS"
+        );
+    }
+
+
+
+    
+    // Method to test average transaction amount
+    static void testTask2_AverageAmount() {
+
+        
+        // Printing task heading
+        System.out.println(
+                "Task 2: getAverageTransactionAmountByAccount..."
+        );
+
+
+        
+        // Creating AccountManager object
+        AccountManager mgr = new AccountManager();
+
+
+        
+        // Adding multiple transactions
+        mgr.addTransaction(
+                new Transaction(
+                        101,
+                        1,
+                        TransactionType.CREDIT,
+                        100.0,
+                        1000
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        102,
+                        1,
+                        TransactionType.DEBIT,
+                        30.0,
+                        1010
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        103,
+                        1,
+                        TransactionType.DEBIT,
+                        20.0,
+                        1020
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        104,
+                        1,
+                        TransactionType.CREDIT,
+                        10.0,
+                        1030
+                )
+        );
+
+
+        
+        // Fetching average map
+        Map<Integer, Double> avg =
+                mgr.getAverageTransactionAmountByAccount();
+
+
+        
+        // Validating account 1 average
+        assert Math.abs(avg.get(1) - 40.0) < 0.01;
+
+
+        
+        // Printing result
+        System.out.println(
+                "  A1 avg=" + avg.get(1) +
+                "  PASS"
+        );
+    }
+
+
+
+    
+    // Method to test transaction fees
+    static void testTask3_Fees() {
+
+        
+        // Printing task heading
+        System.out.println("Task 3: getTransactionFees...");
+
+
+        
+        // Creating AccountManager object
+        AccountManager mgr = new AccountManager();
+
+
+        
+        // Adding multiple transactions
+        mgr.addTransaction(
+                new Transaction(
+                        1,
+                        1,
+                        TransactionType.CREDIT,
+                        100.0,
+                        1000
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        2,
+                        1,
+                        TransactionType.DEBIT,
+                        20.0,
+                        1010
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        3,
+                        1,
+                        TransactionType.CREDIT,
+                        10.0,
+                        1020
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        4,
+                        1,
+                        TransactionType.DEBIT,
+                        5.0,
+                        1030
+                )
+        );
+
+
+        
+        // Fetching fees map
+        Map<Integer, Double> fees =
+                mgr.getTransactionFees();
+
+
+        
+        // Validating fee result
+        assert Math.abs(fees.get(1) - 2.0) < 0.01;
+
+
+        
+        // Printing final fee
+        System.out.println(
+                "  A1=$" + fees.get(1) +
+                "  PASS"
+        );
+    }
+}
+
+
+
+
+---------------------------------------------------------------------------------------------------------
+
+
+
+// Importing all utility classes like List, Map, HashMap, ArrayList, Comparator etc.
+import java.util.*;
+
+// ╔══════════════════════════════════════════════════════════════════╗
+//  QUESTION 2 — PAYMENT TRANSACTION MONITORING
+// ╚══════════════════════════════════════════════════════════════════╝
+
+
+// Creating an enum to represent only 2 valid transaction types
+enum TransactionType {
+    
+    // CREDIT means money added into account
+    CREDIT,
+
+    // DEBIT means money deducted from account
+    DEBIT
+}
+
+
+// Transaction class represents one banking transaction
+class Transaction {
+
+    // transactionId = unique id of transaction
+    // accountId = account to which transaction belongs
+    int transactionId, accountId;
+
+    // type stores whether transaction is CREDIT or DEBIT
+    TransactionType type;
+
+    // amount stores money involved in transaction
+    double amount;
+
+    // timestampSec stores time in unix seconds
+    long timestampSec;
+
+    
+    // Constructor to initialise transaction object
+    Transaction(int tid, int aid, TransactionType type, double amount, long ts) {
+
+        // Assigning constructor values to object variables
+        this.transactionId = tid;
+        this.accountId = aid;
+
+        this.type = type;
+        this.amount = amount;
+
+        this.timestampSec = ts;
+    }
+
+    
+    // Getter method to return accountId
+    public int getAccountId() {
+        return accountId;
+    }
+
+    
+    // Getter method to return transaction type
+    public TransactionType getType() {
+        return type;
+    }
+
+    
+    // Getter method to return amount
+    public double getAmount() {
+        return amount;
+    }
+
+    
+    // Getter method to return timestamp
+    public long getTimestampSec() {
+        return timestampSec;
+    }
+}
+
+
+// AccountManager class manages all account transactions
+class AccountManager {
+
+    // Creating a list to store all transactions
+    List<Transaction> transactions = new ArrayList<>();
+
+
+    // Method to add new transaction into list
+    void addTransaction(Transaction tx) {
+
+        // Adding transaction object into transaction list
+        transactions.add(tx);
+    }
+
+
+    // Method to calculate account balance
+    public double getBalance(int accountId) {
+
+        // Variable to store final balance
+        double balance = 0.0;
+
+        
+        // Adding for loop to iterate through all transactions
+        for (Transaction tx : transactions) {
+
+            
+            // Adding if condition to check whether transaction belongs to requested account
+            if (tx.accountId == accountId) {
+
+                
+                // Adding if condition to check if transaction is CREDIT
+                if (tx.type == TransactionType.CREDIT)
+
+                    // CREDIT means money added to balance
+                    balance += tx.amount;
+
+                else
+
+                    // DEBIT means money deducted from balance
+                    balance -= tx.amount;
+            }
+        }
+
+        
+        // Returning final calculated balance
+        return balance;
+    }
+
+
+    // Method to calculate average transaction amount per account
+    public Map<Integer, Double> getAverageTransactionAmountByAccount() {
+
+        
+        // Creating map to store total amount per account
+        Map<Integer, Double> sumMap = new HashMap<>();
+
+        
+        // Creating map to store transaction count per account
+        Map<Integer, Integer> countMap = new HashMap<>();
+
+
+        // Adding for loop to iterate through all transactions
+        for (Transaction tx : transactions) {
+
+            
+            // Adding current transaction amount into sumMap
+            sumMap.put(
+                tx.getAccountId(),
+
+                
+                // getOrDefault returns existing sum else 0.0 if key not present
+                sumMap.getOrDefault(tx.getAccountId(), 0.0)
+                        + tx.getAmount()
+            );
+
+
+            
+            // Increasing transaction count for that account
+            countMap.put(
+                tx.getAccountId(),
+
+                
+                // getOrDefault returns existing count else 0
+                countMap.getOrDefault(tx.getAccountId(), 0)
+                        + 1
+            );
+        }
+
+
+        
+        // Creating final result map to store averages
+        Map<Integer, Double> result = new HashMap<>();
+
+
+        
+        // Adding for loop to iterate through all account ids in sumMap
+        for (int id : sumMap.keySet()) {
+
+            
+            // Calculating average = total amount / count
+            result.put(
+                id,
+                sumMap.get(id) / countMap.get(id)
+            );
+        }
+
+
+        
+        // Returning final average map
+        return result;
+    }
+
+
+    // Method to calculate transaction fees for each account
+    public Map<Integer, Double> getTransactionFees() {
+
+
+        
+        // STEP 1 : Group transactions account-wise
+        
+        // Creating map where:
+        // key   = accountId
+        // value = list of transactions of that account
+        Map<Integer, List<Transaction>> txByAccount = new HashMap<>();
+
+
+        
+        // Adding for loop to iterate through all transactions
+        for (Transaction tx : transactions) {
+
+            
+            // computeIfAbsent creates new ArrayList if account key not present
+            // then adds transaction into that account list
+            txByAccount
+                    .computeIfAbsent(
+                            tx.getAccountId(),
+                            k -> new ArrayList<>()
+                    )
+                    .add(tx);
+        }
+
+
+        
+        // Creating final fees map
+        Map<Integer, Double> fees = new HashMap<>();
+
+
+        
+        // Adding for loop to iterate through each account entry
+        for (Map.Entry<Integer, List<Transaction>> entry
+                : txByAccount.entrySet()) {
+
+            
+            // Getting all transactions of current account
+            List<Transaction> accountTxs = entry.getValue();
+
+
+            
+            // STEP 2 : Sorting transactions by timestamp
+            
+            // Sorting because input transactions may come in random order
+            accountTxs.sort(
+                    Comparator.comparingLong(
+                            Transaction::getTimestampSec
+                    )
+            );
+
+
+            
+            // Variable to store total fee of current account
+            double totalFee = 0.0;
+
+
+            
+            // STEP 3 : Applying fee rules
+            
+            // Adding for loop using index because fee depends on transaction position
+            for (int i = 0; i < accountTxs.size(); i++) {
+
+
+                
+                // Adding if condition to skip first 3 free transactions
+                if (i >= 3) {
+
+                    
+                    // Fetching current transaction
+                    Transaction tx = accountTxs.get(i);
+
+
+                    
+                    // Adding ternary operator to apply fee rule:
+                    // CREDIT = $1
+                    // DEBIT  = $2
+                    totalFee +=
+                            (tx.getType() == TransactionType.CREDIT)
+                                    ? 1.0
+                                    : 2.0;
+                }
+            }
+
+
+            
+            // Storing final fee of current account into map
+            fees.put(entry.getKey(), totalFee);
+        }
+
+
+        
+        // Returning final fees map
+        return fees;
+    }
+}
+
+
+
+// Main class
+public class Q2_Payment {
+
+    
+    // Main method execution starts from here
+    public static void main(String[] args) {
+
+        
+        // Calling Task 1 test method
+        testTask1_BugFix();
+
+        
+        // Calling Task 2 test method
+        testTask2_AverageAmount();
+
+        
+        // Calling Task 3 test method
+        testTask3_Fees();
+
+
+        
+        // Printing success message
+        System.out.println("\nAll 3 tasks PASSED!");
+    }
+
+
+
+    
+    // Method to test getBalance()
+    static void testTask1_BugFix() {
+
+        
+        // Printing task heading
+        System.out.println("Task 1 (Bug Fix): getBalance...");
+
+
+        
+        // Creating AccountManager object
+        AccountManager mgr = new AccountManager();
+
+
+        
+        // Adding transactions into manager
+        mgr.addTransaction(
+                new Transaction(
+                        201,
+                        1,
+                        TransactionType.CREDIT,
+                        50.0,
+                        2000
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        202,
+                        2,
+                        TransactionType.CREDIT,
+                        80.0,
+                        2005
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        203,
+                        1,
+                        TransactionType.DEBIT,
+                        10.0,
+                        2010
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        204,
+                        2,
+                        TransactionType.DEBIT,
+                        5.5,
+                        2015
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        205,
+                        2,
+                        TransactionType.DEBIT,
+                        14.5,
+                        2020
+                )
+        );
+
+
+        
+        // Calling getBalance for account 1
+        double bal1 = mgr.getBalance(1);
+
+        
+        // Calling getBalance for account 2
+        double bal2 = mgr.getBalance(2);
+
+
+        
+        // Assertion to validate balance of account 1
+        assert Math.abs(bal1 - 40.0) < 0.01
+                : "A1 expected 40.0";
+
+
+        
+        // Assertion to validate balance of account 2
+        assert Math.abs(bal2 - 60.0) < 0.01
+                : "A2 expected 60.0";
+
+
+        
+        // Printing final output
+        System.out.println(
+                "  A1=" + bal1 +
+                "  A2=" + bal2 +
+                "  PASS"
+        );
+    }
+
+
+
+    
+    // Method to test average transaction amount
+    static void testTask2_AverageAmount() {
+
+        
+        // Printing task heading
+        System.out.println(
+                "Task 2: getAverageTransactionAmountByAccount..."
+        );
+
+
+        
+        // Creating AccountManager object
+        AccountManager mgr = new AccountManager();
+
+
+        
+        // Adding multiple transactions
+        mgr.addTransaction(
+                new Transaction(
+                        101,
+                        1,
+                        TransactionType.CREDIT,
+                        100.0,
+                        1000
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        102,
+                        1,
+                        TransactionType.DEBIT,
+                        30.0,
+                        1010
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        103,
+                        1,
+                        TransactionType.DEBIT,
+                        20.0,
+                        1020
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        104,
+                        1,
+                        TransactionType.CREDIT,
+                        10.0,
+                        1030
+                )
+        );
+
+
+        
+        // Fetching average map
+        Map<Integer, Double> avg =
+                mgr.getAverageTransactionAmountByAccount();
+
+
+        
+        // Validating account 1 average
+        assert Math.abs(avg.get(1) - 40.0) < 0.01;
+
+
+        
+        // Printing result
+        System.out.println(
+                "  A1 avg=" + avg.get(1) +
+                "  PASS"
+        );
+    }
+
+
+
+    
+    // Method to test transaction fees
+    static void testTask3_Fees() {
+
+        
+        // Printing task heading
+        System.out.println("Task 3: getTransactionFees...");
+
+
+        
+        // Creating AccountManager object
+        AccountManager mgr = new AccountManager();
+
+
+        
+        // Adding multiple transactions
+        mgr.addTransaction(
+                new Transaction(
+                        1,
+                        1,
+                        TransactionType.CREDIT,
+                        100.0,
+                        1000
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        2,
+                        1,
+                        TransactionType.DEBIT,
+                        20.0,
+                        1010
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        3,
+                        1,
+                        TransactionType.CREDIT,
+                        10.0,
+                        1020
+                )
+        );
+
+        mgr.addTransaction(
+                new Transaction(
+                        4,
+                        1,
+                        TransactionType.DEBIT,
+                        5.0,
+                        1030
+                )
+        );
+
+
+        
+        // Fetching fees map
+        Map<Integer, Double> fees =
+                mgr.getTransactionFees();
+
+
+        
+        // Validating fee result
+        assert Math.abs(fees.get(1) - 2.0) < 0.01;
+
+
+        
+        // Printing final fee
+        System.out.println(
+                "  A1=$" + fees.get(1) +
+                "  PASS"
+        );
+    }
+}
+
+
+
+
+
+-----------------------------------------------------------------------------------------------------------------
+
+
+
+
+// Importing Java utility package for List, Map, HashMap, ArrayList, Collections etc.
+import java.util.*;
+
+
+// Creating enum to define all possible order states
+enum OrderStatus {
+
+    // Order is newly placed by customer
+    PLACED,
+
+    // Restaurant is preparing food
+    PREPARING,
+
+    // Delivery partner is delivering order
+    OUT_FOR_DELIVERY,
+
+    // Order successfully delivered
+    DELIVERED,
+
+    // Order cancelled
+    CANCELED
+}
+
+
+// Order class represents one food order
+class Order {
+
+    // Unique order ID
+    int orderId;
+
+    // Restaurant ID from where order was placed
+    int restaurantId;
+
+    // Customer ID who placed the order
+    int customerId;
+
+    // Total order amount
+    double orderValue;
+
+    // Distance travelled for delivery
+    double distanceKm;
+
+    // Current order status
+    OrderStatus status;
+
+
+    // Constructor to initialise all order fields
+    Order(
+            int orderId,
+            int restaurantId,
+            int customerId,
+            double orderValue,
+            double distanceKm,
+            OrderStatus status
+    ) {
+
+        // Assigning constructor values to object variables
+        this.orderId = orderId;
+
+        this.restaurantId = restaurantId;
+
+        this.customerId = customerId;
+
+        this.orderValue = orderValue;
+
+        this.distanceKm = distanceKm;
+
+        this.status = status;
+    }
+}
+
+
+// OrderStats class used as response object to return counts
+class OrderStats {
+
+    // Total order count
+    int totalOrders;
+
+    // Active order count
+    int activeOrders;
+
+    // Closed order count
+    int closedOrders;
+
+
+    // Constructor to initialise statistics
+    OrderStats(int t, int a, int c) {
+
+        // Storing total orders
+        totalOrders = t;
+
+        // Storing active orders
+        activeOrders = a;
+
+        // Storing closed orders
+        closedOrders = c;
+    }
+}
+
+
+// OrderManager class manages all orders
+class OrderManager {
+
+    // Creating list to store all orders
+    List<Order> orders = new ArrayList<>();
+
+
+    // Method to add order into list
+    void addOrder(Order order) {
+
+        // Adding order object into orders list
+        orders.add(order);
+    }
+
+
+    // Method to update order status
+    void updateOrderStatus(int orderId, OrderStatus newStatus) {
+
+        // Adding for loop to iterate through all orders
+        for (Order o : orders) {
+
+            // Adding if condition to find matching order ID
+            if (o.orderId == orderId) {
+
+                // Updating order status
+                o.status = newStatus;
+
+                // Returning immediately after updating order
+                return;
+            }
+        }
+    }
+
+
+    // Method to calculate total, active and closed order count
+    OrderStats getOrderStatistics() {
+
+        // Total orders = size of orders list
+        int total = orders.size();
+
+        // Variables to track active and closed orders
+        int active = 0;
+        int closed = 0;
+
+
+        // Adding for loop to iterate through all orders
+        for (Order o : orders) {
+
+
+            // Adding if condition to check ACTIVE order states
+            if (
+                    o.status == OrderStatus.PLACED
+                    || o.status == OrderStatus.PREPARING
+                    || o.status == OrderStatus.OUT_FOR_DELIVERY
+            ) {
+
+                // Increasing active count
+                active++;
+            }
+
+            else {
+
+                // If not active then it is CLOSED
+                // Covers DELIVERED and CANCELED
+                closed++;
+            }
+        }
+
+
+        // Returning statistics object
+        return new OrderStats(total, active, closed);
+    }
+
+
+    // Method to calculate revenue generated by each restaurant
+    Map<Integer, Double> getRevenuePerRestaurant() {
+
+        // Creating map where:
+        // key   = restaurantId
+        // value = total revenue
+        Map<Integer, Double> revenue = new HashMap<>();
+
+
+        // Adding for loop to iterate through all orders
+        for (Order o : orders) {
+
+
+            // Adding if condition to consider only DELIVERED orders
+            if (o.status == OrderStatus.DELIVERED) {
+
+
+                // Adding order value into restaurant revenue
+                revenue.put(
+
+                        // Restaurant ID as key
+                        o.restaurantId,
+
+                        // Existing revenue + current order value
+                        revenue.getOrDefault(
+                                o.restaurantId,
+                                0.0
+                        ) + o.orderValue
+                );
+            }
+        }
+
+
+        // Returning revenue map
+        return revenue;
+    }
+
+
+    // Method to calculate average delivery distance per customer
+    Map<Integer, Double> getAverageDeliveryDistancePerCustomer() {
+
+
+        // Map to store total distance travelled per customer
+        Map<Integer, Double> sumMap = new HashMap<>();
+
+
+        // Map to store delivery count per customer
+        Map<Integer, Integer> countMap = new HashMap<>();
+
+
+        // Adding for loop to iterate through all orders
+        for (Order o : orders) {
+
+
+            // Adding if condition to consider only DELIVERED orders
+            if (o.status == OrderStatus.DELIVERED) {
+
+
+                // Adding current distance into total distance
+                sumMap.put(
+                        o.customerId,
+
+                        // Existing distance + current distance
+                        sumMap.getOrDefault(
+                                o.customerId,
+                                0.0
+                        ) + o.distanceKm
+                );
+
+
+                // Increasing delivery count for customer
+                countMap.put(
+                        o.customerId,
+
+                        // Existing count + 1
+                        countMap.getOrDefault(
+                                o.customerId,
+                                0
+                        ) + 1
+                );
+            }
+        }
+
+
+        // Creating result map to store averages
+        Map<Integer, Double> result = new HashMap<>();
+
+
+        // Adding for loop to iterate through all customer IDs
+        for (int id : sumMap.keySet()) {
+
+
+            // Calculating average distance = total distance / delivery count
+            result.put(
+                    id,
+                    sumMap.get(id) / countMap.get(id)
+            );
+        }
+
+
+        // Returning average map
+        return result;
+    }
+
+
+    // Method to find customers having 3 or more orders
+    List<Integer> getHighlyActiveCustomers() {
+
+
+        // Creating map to count orders per customer
+        Map<Integer, Integer> countMap = new HashMap<>();
+
+
+        // Adding for loop to iterate through all orders
+        for (Order o : orders) {
+
+
+            // Increasing order count of customer
+            countMap.put(
+
+                    // Customer ID as key
+                    o.customerId,
+
+                    // Existing count + 1
+                    countMap.getOrDefault(
+                            o.customerId,
+                            0
+                    ) + 1
+            );
+        }
+
+
+        // Creating list to store highly active customers
+        List<Integer> result = new ArrayList<>();
+
+
+        // Adding for loop to iterate through map entries
+        for (Map.Entry<Integer, Integer> entry
+                : countMap.entrySet()) {
+
+
+            // Adding if condition to check customer has 3 or more orders
+            if (entry.getValue() >= 3) {
+
+                // Adding customer ID into result list
+                result.add(entry.getKey());
+            }
+        }
+
+
+        // Sorting result list in ascending order
+        Collections.sort(result);
+
+
+        // Returning sorted customer list
+        return result;
+    }
+}
+
+
+
+// Main class
+public class Q1_FoodDelivery {
+
+
+    // Main method execution starts from here
+    public static void main(String[] args) {
+
+
+        // Calling Task 1 test method
+        testTask1_BugFix();
+
+
+        // Calling Task 2 test method
+        testTask2_Revenue();
+
+
+        // Calling Task 3 test method
+        testTask3_AvgDistance();
+
+
+        // Calling Task 4 test method
+        testTask4_ActiveCustomers();
+
+
+        // Printing success message
+        System.out.println("\nAll 4 tasks PASSED!");
+    }
+
+
+
+    // Method to test order statistics
+    static void testTask1_BugFix() {
+
+        // Printing task heading
+        System.out.println(
+                "Task 1 (Bug Fix): getOrderStatistics..."
+        );
+
+
+        // Creating OrderManager object
+        OrderManager om = new OrderManager();
+
+
+        // Adding sample orders
+        om.addOrder(
+                new Order(
+                        1,
+                        10,
+                        100,
+                        25.0,
+                        3.2,
+                        OrderStatus.PLACED
+                )
+        );
+
+        om.addOrder(
+                new Order(
+                        2,
+                        10,
+                        101,
+                        55.0,
+                        1.4,
+                        OrderStatus.PREPARING
+                )
+        );
+
+        om.addOrder(
+                new Order(
+                        3,
+                        11,
+                        102,
+                        15.0,
+                        6.0,
+                        OrderStatus.OUT_FOR_DELIVERY
+                )
+        );
+
+        om.addOrder(
+                new Order(
+                        4,
+                        11,
+                        103,
+                        40.0,
+                        2.0,
+                        OrderStatus.DELIVERED
+                )
+        );
+
+        om.addOrder(
+                new Order(
+                        5,
+                        12,
+                        104,
+                        18.0,
+                        4.5,
+                        OrderStatus.CANCELED
+                )
+        );
+
+
+        // Calling method to get statistics
+        OrderStats s = om.getOrderStatistics();
+
+
+        // Validating total order count
+        assert s.totalOrders == 5;
+
+
+        // Validating active order count
+        assert s.activeOrders == 3;
+
+
+        // Validating closed order count
+        assert s.closedOrders == 2;
+
+
+        // Printing final output
+        System.out.println(
+                "  total=" + s.totalOrders
+                + " active=" + s.activeOrders
+                + " closed=" + s.closedOrders
+                + " PASS"
+        );
+    }
+
+
+
+    // Method to test revenue calculation
+    static void testTask2_Revenue() {
+
+        // Printing task heading
+        System.out.println(
+                "Task 2: getRevenuePerRestaurant..."
+        );
+
+
+        // Creating OrderManager object
+        OrderManager om = new OrderManager();
+
+
+        // Adding orders
+        om.addOrder(
+                new Order(
+                        1,
+                        10,
+                        100,
+                        25.0,
+                        3.2,
+                        OrderStatus.DELIVERED
+                )
+        );
+
+        om.addOrder(
+                new Order(
+                        2,
+                        10,
+                        101,
+                        55.0,
+                        1.4,
+                        OrderStatus.DELIVERED
+                )
+        );
+
+
+        // Calling revenue method
+        Map<Integer, Double> rev =
+                om.getRevenuePerRestaurant();
+
+
+        // Validating restaurant revenue
+        assert Math.abs(rev.get(10) - 80.0) < 0.01;
+
+
+        // Printing final result
+        System.out.println(
+                "  R10=" + rev.get(10)
+                + " PASS"
+        );
+    }
+
+
+
+    // Method to test average distance calculation
+    static void testTask3_AvgDistance() {
+
+        // Printing task heading
+        System.out.println(
+                "Task 3: getAverageDeliveryDistancePerCustomer..."
+        );
+
+
+        // Creating OrderManager object
+        OrderManager om = new OrderManager();
+
+
+        // Adding orders
+        om.addOrder(
+                new Order(
+                        1,
+                        10,
+                        100,
+                        25.0,
+                        3.0,
+                        OrderStatus.DELIVERED
+                )
+        );
+
+        om.addOrder(
+                new Order(
+                        2,
+                        10,
+                        100,
+                        30.0,
+                        5.0,
+                        OrderStatus.DELIVERED
+                )
+        );
+
+
+        // Calling average distance method
+        Map<Integer, Double> avg =
+                om.getAverageDeliveryDistancePerCustomer();
+
+
+        // Validating average distance
+        assert Math.abs(avg.get(100) - 4.0) < 0.01;
+
+
+        // Printing result
+        System.out.println(
+                "  C100=" + avg.get(100)
+                + " PASS"
+        );
+    }
+
+
+
+    // Method to test highly active customers
+    static void testTask4_ActiveCustomers() {
+
+        // Printing task heading
+        System.out.println(
+                "Task 4: getHighlyActiveCustomers..."
+        );
+
+
+        // Creating OrderManager object
+        OrderManager om = new OrderManager();
+
+
+        // Adding multiple orders for same customer
+        om.addOrder(
+                new Order(
+                        1,
+                        10,
+                        100,
+                        10.0,
+                        1.0,
+                        OrderStatus.PLACED
+                )
+        );
+
+        om.addOrder(
+                new Order(
+                        2,
+                        10,
+                        100,
+                        20.0,
+                        2.0,
+                        OrderStatus.CANCELED
+                )
+        );
+
+        om.addOrder(
+                new Order(
+                        3,
+                        10,
+                        100,
+                        30.0,
+                        3.0,
+                        OrderStatus.DELIVERED
+                )
+        );
+
+
+        // Calling highly active customer method
+        List<Integer> result =
+                om.getHighlyActiveCustomers();
+
+
+        // Validating customer exists in result
+        assert result.contains(100);
+
+
+        // Printing final output
+        System.out.println(
+                "  Highly active customers=" + result
+                + " PASS"
+        );
+    }
+}
+
+
+
+
+
+
+-----------------------------------------------------------------------------------------------------------------------------------
