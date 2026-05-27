@@ -1,8 +1,11 @@
 -- ============================================
 -- EMPLOYEE LEAVE MANAGEMENT SYSTEM
 -- Complete MySQL Schema DDL
+-- AUTO_INCREMENT IDs (no UUID)
+-- Version: 2.0
 -- ============================================
 
+-- Create Database
 CREATE DATABASE IF NOT EXISTS leave_management_db
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
@@ -11,10 +14,10 @@ USE leave_management_db;
 
 -- ============================================
 -- TABLE 1: users
--- Managed by: User Service
+-- Managed by: User Service (port 8081)
 -- ============================================
 CREATE TABLE IF NOT EXISTS users (
-    id              CHAR(36)        NOT NULL,
+    id              BIGINT          NOT NULL AUTO_INCREMENT,
     username        VARCHAR(50)     NOT NULL,
     email           VARCHAR(150)    NOT NULL,
     password_hash   VARCHAR(255)    NOT NULL,
@@ -39,13 +42,13 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- ============================================
 -- TABLE 2: departments
--- Managed by: Employee Service
+-- Managed by: Employee Service (port 8082)
 -- ============================================
 CREATE TABLE IF NOT EXISTS departments (
-    id              CHAR(36)        NOT NULL,
+    id              BIGINT          NOT NULL AUTO_INCREMENT,
     name            VARCHAR(100)    NOT NULL,
     description     TEXT,
-    manager_id      CHAR(36),
+    manager_id      BIGINT,
     is_active       TINYINT(1)      NOT NULL DEFAULT 1,
     created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -58,18 +61,18 @@ CREATE TABLE IF NOT EXISTS departments (
 
 -- ============================================
 -- TABLE 3: employees
--- Managed by: Employee Service
+-- Managed by: Employee Service (port 8082)
 -- ============================================
 CREATE TABLE IF NOT EXISTS employees (
-    id              CHAR(36)        NOT NULL,
-    user_id         CHAR(36)        NOT NULL,
+    id              BIGINT          NOT NULL AUTO_INCREMENT,
+    user_id         BIGINT          NOT NULL,
     employee_code   VARCHAR(20)     NOT NULL,
     first_name      VARCHAR(50)     NOT NULL,
     last_name       VARCHAR(50)     NOT NULL,
     email           VARCHAR(150)    NOT NULL,
     phone           VARCHAR(15),
-    department_id   CHAR(36),
-    manager_id      CHAR(36),
+    department_id   BIGINT,
+    manager_id      BIGINT,
     designation     VARCHAR(100)    NOT NULL,
     employment_type ENUM(
                         'FULL_TIME',
@@ -84,25 +87,27 @@ CREATE TABLE IF NOT EXISTS employees (
     updated_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
                                     ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE KEY uq_employees_user_id      (user_id),
-    UNIQUE KEY uq_employees_code         (employee_code),
-    UNIQUE KEY uq_employees_email        (email),
-    INDEX idx_employees_department       (department_id),
-    INDEX idx_employees_manager          (manager_id),
-    INDEX idx_employees_active           (is_active),
-    INDEX idx_employees_employment_type  (employment_type),
+    UNIQUE KEY uq_employees_user_id  (user_id),
+    UNIQUE KEY uq_employees_code     (employee_code),
+    UNIQUE KEY uq_employees_email    (email),
+    INDEX idx_employees_department   (department_id),
+    INDEX idx_employees_manager      (manager_id),
+    INDEX idx_employees_active       (is_active),
+    INDEX idx_employees_emp_type     (employment_type),
     CONSTRAINT fk_employees_user
-        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (user_id)
+            REFERENCES users(id),
     CONSTRAINT fk_employees_department
-        FOREIGN KEY (department_id) REFERENCES departments(id)
+        FOREIGN KEY (department_id)
+            REFERENCES departments(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================
 -- TABLE 4: leave_types
--- Managed by: Leave Service
+-- Managed by: Leave Service (port 8083)
 -- ============================================
 CREATE TABLE IF NOT EXISTS leave_types (
-    id                  CHAR(36)        NOT NULL,
+    id                  BIGINT          NOT NULL AUTO_INCREMENT,
     name                VARCHAR(100)    NOT NULL,
     code                VARCHAR(20)     NOT NULL,
     description         TEXT,
@@ -126,17 +131,18 @@ CREATE TABLE IF NOT EXISTS leave_types (
     PRIMARY KEY (id),
     UNIQUE KEY uq_leave_types_name  (name),
     UNIQUE KEY uq_leave_types_code  (code),
-    INDEX idx_leave_types_active    (is_active)
+    INDEX idx_leave_types_active    (is_active),
+    INDEX idx_leave_types_gender    (applicable_gender)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================
 -- TABLE 5: employee_leave_balance
--- Managed by: Employee Service
+-- Managed by: Employee Service (port 8082)
 -- ============================================
 CREATE TABLE IF NOT EXISTS employee_leave_balance (
-    id              CHAR(36)        NOT NULL,
-    employee_id     CHAR(36)        NOT NULL,
-    leave_type_id   CHAR(36)        NOT NULL,
+    id              BIGINT          NOT NULL AUTO_INCREMENT,
+    employee_id     BIGINT          NOT NULL,
+    leave_type_id   BIGINT          NOT NULL,
     year            INT             NOT NULL,
     total_days      DECIMAL(5,1)    NOT NULL DEFAULT 0,
     used_days       DECIMAL(5,1)    NOT NULL DEFAULT 0,
@@ -153,19 +159,21 @@ CREATE TABLE IF NOT EXISTS employee_leave_balance (
     INDEX idx_balance_leave_type    (leave_type_id),
     INDEX idx_balance_year          (year),
     CONSTRAINT fk_balance_employee
-        FOREIGN KEY (employee_id) REFERENCES employees(id),
+        FOREIGN KEY (employee_id)
+            REFERENCES employees(id),
     CONSTRAINT fk_balance_leave_type
-        FOREIGN KEY (leave_type_id) REFERENCES leave_types(id)
+        FOREIGN KEY (leave_type_id)
+            REFERENCES leave_types(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================
 -- TABLE 6: leave_applications
--- Managed by: Leave Service
+-- Managed by: Leave Service (port 8083)
 -- ============================================
 CREATE TABLE IF NOT EXISTS leave_applications (
-    id              CHAR(36)        NOT NULL,
-    employee_id     CHAR(36)        NOT NULL,
-    leave_type_id   CHAR(36)        NOT NULL,
+    id              BIGINT          NOT NULL AUTO_INCREMENT,
+    employee_id     BIGINT          NOT NULL,
+    leave_type_id   BIGINT          NOT NULL,
     start_date      DATE            NOT NULL,
     end_date        DATE            NOT NULL,
     total_days      DECIMAL(5,1)    NOT NULL,
@@ -196,19 +204,21 @@ CREATE TABLE IF NOT EXISTS leave_applications (
     INDEX idx_leave_app_dates       (start_date, end_date),
     INDEX idx_leave_app_applied_at  (applied_at),
     CONSTRAINT fk_leave_app_employee
-        FOREIGN KEY (employee_id) REFERENCES employees(id),
+        FOREIGN KEY (employee_id)
+            REFERENCES employees(id),
     CONSTRAINT fk_leave_app_leave_type
-        FOREIGN KEY (leave_type_id) REFERENCES leave_types(id)
+        FOREIGN KEY (leave_type_id)
+            REFERENCES leave_types(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================
 -- TABLE 7: leave_approvals
--- Managed by: Leave Service
+-- Managed by: Leave Service (port 8083)
 -- ============================================
 CREATE TABLE IF NOT EXISTS leave_approvals (
-    id                  CHAR(36)        NOT NULL,
-    application_id      CHAR(36)        NOT NULL,
-    approver_id         CHAR(36)        NOT NULL,
+    id                  BIGINT          NOT NULL AUTO_INCREMENT,
+    application_id      BIGINT          NOT NULL,
+    approver_id         BIGINT          NOT NULL,
     approver_role       ENUM(
                             'ROLE_MANAGER',
                             'ROLE_HR',
@@ -220,12 +230,15 @@ CREATE TABLE IF NOT EXISTS leave_approvals (
                             'FORWARDED'
                         )               NOT NULL,
     comments            TEXT,
-    action_at           DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_at          DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    action_at           DATETIME        NOT NULL
+                                        DEFAULT CURRENT_TIMESTAMP,
+    created_at          DATETIME        NOT NULL
+                                        DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    INDEX idx_approvals_application  (application_id),
-    INDEX idx_approvals_approver     (approver_id),
-    INDEX idx_approvals_action       (action),
+    INDEX idx_approvals_application (application_id),
+    INDEX idx_approvals_approver    (approver_id),
+    INDEX idx_approvals_action      (action),
+    INDEX idx_approvals_action_at   (action_at),
     CONSTRAINT fk_approvals_application
         FOREIGN KEY (application_id)
             REFERENCES leave_applications(id)
@@ -233,10 +246,10 @@ CREATE TABLE IF NOT EXISTS leave_approvals (
 
 -- ============================================
 -- TABLE 8: holidays
--- Managed by: Leave Service
+-- Managed by: Leave Service (port 8083)
 -- ============================================
 CREATE TABLE IF NOT EXISTS holidays (
-    id              CHAR(36)        NOT NULL,
+    id              BIGINT          NOT NULL AUTO_INCREMENT,
     name            VARCHAR(100)    NOT NULL,
     holiday_date    DATE            NOT NULL,
     holiday_type    ENUM(
@@ -249,17 +262,18 @@ CREATE TABLE IF NOT EXISTS holidays (
     created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY uq_holidays_date_name (holiday_date, name),
-    INDEX idx_holidays_date         (holiday_date),
-    INDEX idx_holidays_type         (holiday_type)
+    INDEX idx_holidays_date          (holiday_date),
+    INDEX idx_holidays_type          (holiday_type),
+    INDEX idx_holidays_active        (is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================
 -- TABLE 9: notifications
--- Managed by: Notification Service
+-- Managed by: Notification Service (port 8084)
 -- ============================================
 CREATE TABLE IF NOT EXISTS notifications (
-    id              CHAR(36)        NOT NULL,
-    user_id         CHAR(36)        NOT NULL,
+    id              BIGINT          NOT NULL AUTO_INCREMENT,
+    user_id         BIGINT          NOT NULL,
     type            VARCHAR(50)     NOT NULL,
     channel         ENUM(
                         'EMAIL',
@@ -289,18 +303,17 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 -- ============================================
 -- TABLE 10: audit_logs
--- Managed by: Audit Service
+-- Managed by: Audit Service (port 8086)
 -- ============================================
 CREATE TABLE IF NOT EXISTS audit_logs (
-    id              CHAR(36)        NOT NULL,
-    user_id         CHAR(36)        NOT NULL,
+    id              BIGINT          NOT NULL AUTO_INCREMENT,
+    user_id         BIGINT          NOT NULL,
     action          VARCHAR(100)    NOT NULL,
     entity          VARCHAR(100)    NOT NULL,
-    entity_id       CHAR(36),
+    entity_id       BIGINT,
     old_value       JSON,
     new_value       JSON,
     ip_address      VARCHAR(45),
-    user_agent      VARCHAR(255),
     description     TEXT,
     created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -313,11 +326,11 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 -- ============================================
 -- TABLE 11: leave_reports
--- Managed by: Report Service
+-- Managed by: Report Service (port 8085)
 -- ============================================
 CREATE TABLE IF NOT EXISTS leave_reports (
-    id              CHAR(36)        NOT NULL,
-    generated_by    CHAR(36)        NOT NULL,
+    id              BIGINT          NOT NULL AUTO_INCREMENT,
+    generated_by    BIGINT          NOT NULL,
     report_type     ENUM(
                         'MONTHLY',
                         'YEARLY',
@@ -329,8 +342,8 @@ CREATE TABLE IF NOT EXISTS leave_reports (
     title           VARCHAR(255)    NOT NULL,
     from_date       DATE,
     to_date         DATE,
-    department_id   CHAR(36),
-    employee_id     CHAR(36),
+    department_id   BIGINT,
+    employee_id     BIGINT,
     report_data     JSON,
     status          ENUM(
                         'GENERATING',
@@ -345,20 +358,20 @@ CREATE TABLE IF NOT EXISTS leave_reports (
     INDEX idx_reports_type          (report_type),
     INDEX idx_reports_dates         (from_date, to_date),
     INDEX idx_reports_department    (department_id),
+    INDEX idx_reports_employee      (employee_id),
     INDEX idx_reports_created       (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================
 -- TABLE 12: leave_calendar
--- Managed by: Leave Service
--- Team leave calendar view
+-- Managed by: Leave Service (port 8083)
 -- ============================================
 CREATE TABLE IF NOT EXISTS leave_calendar (
-    id                  CHAR(36)        NOT NULL,
-    employee_id         CHAR(36)        NOT NULL,
-    application_id      CHAR(36)        NOT NULL,
+    id                  BIGINT          NOT NULL AUTO_INCREMENT,
+    employee_id         BIGINT          NOT NULL,
+    application_id      BIGINT          NOT NULL,
     leave_date          DATE            NOT NULL,
-    leave_type_id       CHAR(36)        NOT NULL,
+    leave_type_id       BIGINT          NOT NULL,
     is_half_day         TINYINT(1)      NOT NULL DEFAULT 0,
     status              ENUM(
                             'PENDING',
@@ -368,121 +381,181 @@ CREATE TABLE IF NOT EXISTS leave_calendar (
                         )               NOT NULL DEFAULT 'PENDING',
     created_at          DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    INDEX idx_calendar_employee     (employee_id),
-    INDEX idx_calendar_date         (leave_date),
-    INDEX idx_calendar_application  (application_id),
-    INDEX idx_calendar_status       (status),
+    UNIQUE KEY uq_calendar_emp_date  (employee_id, leave_date),
+    INDEX idx_calendar_employee      (employee_id),
+    INDEX idx_calendar_date          (leave_date),
+    INDEX idx_calendar_application   (application_id),
+    INDEX idx_calendar_leave_type    (leave_type_id),
+    INDEX idx_calendar_status        (status),
     CONSTRAINT fk_calendar_employee
-        FOREIGN KEY (employee_id) REFERENCES employees(id),
+        FOREIGN KEY (employee_id)
+            REFERENCES employees(id),
     CONSTRAINT fk_calendar_application
         FOREIGN KEY (application_id)
             REFERENCES leave_applications(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================
--- SEED DATA
+-- SEED DATA — Leave Types
 -- ============================================
+INSERT INTO leave_types (
+    name, code, description,
+    max_days_per_year, max_days_per_apply,
+    min_days_per_apply, is_paid,
+    carry_forward, carry_forward_limit,
+    requires_approval, auto_approve_after,
+    applicable_gender, is_active
+) VALUES
+(
+    'Annual Leave', 'AL',
+    'Yearly earned leave for all employees',
+    18, 18, 1.0, 1, 1, 5, 1, 0, 'ALL', 1
+),
+(
+    'Sick Leave', 'SL',
+    'Leave for medical illness or injury',
+    12, 12, 0.5, 1, 0, 0, 1, 0, 'ALL', 1
+),
+(
+    'Casual Leave', 'CL',
+    'Leave for personal work or emergencies',
+    6, 3, 0.5, 1, 0, 0, 1, 0, 'ALL', 1
+),
+(
+    'Maternity Leave', 'ML',
+    'Leave for female employees post childbirth',
+    180, 180, 1.0, 1, 0, 0, 1, 0, 'FEMALE', 1
+),
+(
+    'Paternity Leave', 'PL',
+    'Leave for male employees after birth of child',
+    15, 15, 1.0, 1, 0, 0, 1, 0, 'MALE', 1
+),
+(
+    'Unpaid Leave', 'UL',
+    'Leave without pay when other leaves exhausted',
+    365, 30, 1.0, 0, 0, 0, 1, 0, 'ALL', 1
+),
+(
+    'Compensatory Off', 'CO',
+    'Comp off for working on holidays or weekends',
+    0, 5, 0.5, 1, 0, 0, 1, 0, 'ALL', 1
+),
+(
+    'Bereavement Leave', 'BL',
+    'Leave for death of immediate family member',
+    5, 5, 1.0, 1, 0, 0, 0, 1, 'ALL', 1
+);
 
--- Default Leave Types
-INSERT INTO leave_types
-(id, name, code, description, max_days_per_year,
- max_days_per_apply, min_days_per_apply, is_paid,
- carry_forward, carry_forward_limit, requires_approval,
- auto_approve_after, applicable_gender, is_active)
+-- ============================================
+-- SEED DATA — Departments
+-- ============================================
+INSERT INTO departments (name, description, is_active)
 VALUES
-(UUID(), 'Annual Leave', 'AL',
- 'Yearly earned leave for all employees',
- 18, 18, 1, 1, 1, 5, 1, 0, 'ALL', 1),
-
-(UUID(), 'Sick Leave', 'SL',
- 'Leave for medical illness or injury',
- 12, 12, 0.5, 1, 0, 0, 1, 0, 'ALL', 1),
-
-(UUID(), 'Casual Leave', 'CL',
- 'Leave for personal work or emergencies',
- 6, 3, 0.5, 1, 0, 0, 1, 0, 'ALL', 1),
-
-(UUID(), 'Maternity Leave', 'ML',
- 'Leave for female employees post childbirth',
- 180, 180, 1, 1, 0, 0, 1, 0, 'FEMALE', 1),
-
-(UUID(), 'Paternity Leave', 'PL',
- 'Leave for male employees post childbirth of child',
- 15, 15, 1, 1, 0, 0, 1, 0, 'MALE', 1),
-
-(UUID(), 'Unpaid Leave', 'UL',
- 'Leave without pay when other leaves exhausted',
- 365, 30, 1, 0, 0, 0, 1, 0, 'ALL', 1),
-
-(UUID(), 'Compensatory Off', 'CO',
- 'Comp off for working on holidays or weekends',
- 0, 5, 0.5, 1, 0, 0, 1, 0, 'ALL', 1),
-
-(UUID(), 'Bereavement Leave', 'BL',
- 'Leave for death of immediate family member',
- 5, 5, 1, 1, 0, 0, 0, 1, 'ALL', 1);
-
--- Default Departments
-INSERT INTO departments
-(id, name, description, is_active)
-VALUES
-(UUID(), 'Engineering',
+('Engineering',
  'Software development and technical operations', 1),
-(UUID(), 'Human Resources',
+('Human Resources',
  'HR management and employee relations', 1),
-(UUID(), 'Finance',
+('Finance',
  'Financial planning and accounting', 1),
-(UUID(), 'Marketing',
+('Marketing',
  'Marketing and brand management', 1),
-(UUID(), 'Operations',
+('Operations',
  'Business operations and process management', 1),
-(UUID(), 'Sales',
+('Sales',
  'Sales and business development', 1),
-(UUID(), 'Design',
+('Design',
  'UI/UX and product design', 1),
-(UUID(), 'Quality Assurance',
+('Quality Assurance',
  'Testing and quality control', 1);
 
--- Default Holidays (2026)
+-- ============================================
+-- SEED DATA — National Holidays 2026
+-- ============================================
 INSERT INTO holidays
-(id, name, holiday_date, holiday_type, is_active)
+(name, holiday_date, holiday_type, description, is_active)
 VALUES
-(UUID(), 'New Year Day',
- '2026-01-01', 'NATIONAL', 1),
-(UUID(), 'Republic Day',
- '2026-01-26', 'NATIONAL', 1),
-(UUID(), 'Holi',
- '2026-03-03', 'NATIONAL', 1),
-(UUID(), 'Good Friday',
- '2026-04-03', 'NATIONAL', 1),
-(UUID(), 'Eid ul-Fitr',
- '2026-04-21', 'NATIONAL', 1),
-(UUID(), 'Independence Day',
- '2026-08-15', 'NATIONAL', 1),
-(UUID(), 'Gandhi Jayanti',
- '2026-10-02', 'NATIONAL', 1),
-(UUID(), 'Dussehra',
- '2026-10-21', 'NATIONAL', 1),
-(UUID(), 'Diwali',
- '2026-11-08', 'NATIONAL', 1),
-(UUID(), 'Christmas Day',
- '2026-12-25', 'NATIONAL', 1);
+('New Year Day',
+ '2026-01-01', 'NATIONAL',
+ 'First day of the new year', 1),
+('Republic Day',
+ '2026-01-26', 'NATIONAL',
+ 'National holiday - Republic Day of India', 1),
+('Holi',
+ '2026-03-03', 'NATIONAL',
+ 'Festival of Colors', 1),
+('Good Friday',
+ '2026-04-03', 'NATIONAL',
+ 'Christian religious holiday', 1),
+('Eid ul-Fitr',
+ '2026-04-21', 'NATIONAL',
+ 'End of Ramadan fasting', 1),
+('Independence Day',
+ '2026-08-15', 'NATIONAL',
+ 'National holiday - Independence Day of India', 1),
+('Gandhi Jayanti',
+ '2026-10-02', 'NATIONAL',
+ 'Birth anniversary of Mahatma Gandhi', 1),
+('Dussehra',
+ '2026-10-21', 'NATIONAL',
+ 'Festival celebrating victory of good over evil', 1),
+('Diwali',
+ '2026-11-08', 'NATIONAL',
+ 'Festival of Lights', 1),
+('Christmas Day',
+ '2026-12-25', 'NATIONAL',
+ 'Christian religious holiday', 1);
 
--- Super Admin user
+-- ============================================
+-- SEED DATA — Super Admin User
 -- Password: Admin@1234
-INSERT INTO users
-(id, username, email, password_hash,
- phone, role, is_active, created_at, updated_at)
-VALUES
-(UUID(), 'superadmin', 'admin@leave.com',
- '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lh71',
- '9000000000', 'ROLE_ADMIN', 1, NOW(), NOW());
+-- BCrypt hash of Admin@1234
+-- ============================================
+INSERT INTO users (
+    username, email, password_hash,
+    phone, role, is_active
+) VALUES (
+    'superadmin',
+    'admin@leave.com',
+    '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lh71',
+    '9000000000',
+    'ROLE_ADMIN',
+    1
+);
 
 -- ============================================
--- VERIFY TABLES
+-- VERIFICATION QUERIES
 -- ============================================
-SELECT 'Tables created successfully!' AS status;
-SELECT table_name, table_rows
+SELECT '==============================' AS '';
+SELECT 'DATABASE SETUP COMPLETE!' AS '';
+SELECT '==============================' AS '';
+
+SELECT 'Tables Created:' AS '';
+SELECT table_name AS 'Table Name'
 FROM information_schema.tables
 WHERE table_schema = 'leave_management_db'
 ORDER BY table_name;
+
+SELECT '' AS '';
+SELECT 'Leave Types Seeded:' AS '';
+SELECT id, name, code,
+       max_days_per_year AS max_days,
+       is_paid, carry_forward
+FROM leave_types
+ORDER BY id;
+
+SELECT '' AS '';
+SELECT 'Departments Seeded:' AS '';
+SELECT id, name FROM departments ORDER BY id;
+
+SELECT '' AS '';
+SELECT 'Holidays Seeded:' AS '';
+SELECT id, name, holiday_date,
+       holiday_type
+FROM holidays
+ORDER BY holiday_date;
+
+SELECT '' AS '';
+SELECT 'Admin User Created:' AS '';
+SELECT id, username, email, role
+FROM users WHERE role = 'ROLE_ADMIN';
