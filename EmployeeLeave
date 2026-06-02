@@ -1,0 +1,1557 @@
+Service 1 — Eureka Server
+Fix eureka-server/pom.xml
+Replace entire content:
+xml<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.leave</groupId>
+        <artifactId>leave-management-system</artifactId>
+        <version>1.0.0</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>eureka-server</artifactId>
+    <name>eureka-server</name>
+    <description>Service Discovery Server</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+
+application.yml — Eureka Server
+Rename application.properties → application.yml:
+yamlserver:
+  port: 8761
+
+spring:
+  application:
+    name: eureka-server
+
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  server:
+    wait-time-in-ms-when-sync-empty: 0
+    enable-self-preservation: false
+
+logging:
+  level:
+    com.netflix.eureka: WARN
+    com.netflix.discovery: WARN
+
+EurekaServerApplication.java
+javapackage com.leave.eureka;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.netflix.eureka.server.EnableEurekaServer;
+
+@SpringBootApplication
+@EnableEurekaServer
+public class EurekaServerApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(
+                EurekaServerApplication.class, args);
+    }
+}
+
+Service 2 — API Gateway
+Fix api-gateway/pom.xml
+xml<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.leave</groupId>
+        <artifactId>leave-management-system</artifactId>
+        <version>1.0.0</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>api-gateway</artifactId>
+    <name>api-gateway</name>
+    <description>API Gateway — Single Entry Point</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-gateway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+
+application.yml — API Gateway
+yamlserver:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+
+        # User Service
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/auth/**,/api/users/**
+          filters:
+            - StripPrefix=0
+
+        # Employee Service
+        - id: employee-service
+          uri: lb://employee-service
+          predicates:
+            - Path=/api/employees/**,/api/departments/**,/api/leave-balance/**
+          filters:
+            - StripPrefix=0
+
+        # Leave Service
+        - id: leave-service
+          uri: lb://leave-service
+          predicates:
+            - Path=/api/leaves/**,/api/leave-types/**,/api/holidays/**
+          filters:
+            - StripPrefix=0
+
+        # Notification Service
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - StripPrefix=0
+
+        # Report Service
+        - id: report-service
+          uri: lb://report-service
+          predicates:
+            - Path=/api/reports/**
+          filters:
+            - StripPrefix=0
+
+        # Audit Service
+        - id: audit-service
+          uri: lb://audit-service
+          predicates:
+            - Path=/api/audit/**
+          filters:
+            - StripPrefix=0
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: false
+    hostname: localhost
+    instance-id: ${spring.application.name}:${server.port}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO
+
+ApiGatewayApplication.java
+javapackage com.leave.gateway;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+
+@SpringBootApplication
+@EnableDiscoveryClient
+public class ApiGatewayApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(
+                ApiGatewayApplication.class, args);
+    }
+}
+
+Service 3 — User Service
+Fix user-service/pom.xml
+xml<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.leave</groupId>
+        <artifactId>leave-management-system</artifactId>
+        <version>1.0.0</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>user-service</artifactId>
+    <name>user-service</name>
+    <description>User Service — Auth and JWT</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.11.5</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.5.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+
+Create Package Structure in User Service
+com.leave.user
+├── config
+├── controller
+├── dto
+│   ├── request
+│   └── response
+├── exception
+├── filter
+├── model
+├── repository
+├── security
+└── service
+
+application.yml — User Service
+yamlserver:
+  port: 8081
+
+spring:
+  application:
+    name: user-service
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/leave_management_db?useSSL=false&serverTimezone=Asia/Kolkata&allowPublicKeyRetrieval=true
+    username: root
+    password: your_mysql_password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  flyway:
+    enabled: false
+
+  cache:
+    type: none
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: false
+    hostname: localhost
+    instance-id: ${spring.application.name}:${server.port}
+
+jwt:
+  secret: 5A7134743777217A25432A462D4A614E645267556B58703273357638792F423F
+  expiration: 86400000
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+
+logging:
+  level:
+    com.leave.user: DEBUG
+    org.springframework.security: INFO
+    org.springframework.jdbc: DEBUG
+Replace your_mysql_password with actual password.
+
+Model — User.java
+javapackage com.leave.user.model;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class User {
+    private Long id;
+    private String username;
+    private String email;
+    private String passwordHash;
+    private String phone;
+    private String role;
+    private boolean isActive;
+    private LocalDateTime lastLogin;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+}
+
+DTOs
+RegisterRequest.java
+javapackage com.leave.user.dto.request;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+
+@Data
+public class RegisterRequest {
+
+    @NotBlank(message = "Username is required")
+    @Size(min = 3, max = 50,
+          message = "Username must be 3-50 characters")
+    private String username;
+
+    @NotBlank(message = "Email is required")
+    @Email(message = "Invalid email format")
+    private String email;
+
+    @NotBlank(message = "Password is required")
+    @Size(min = 8,
+          message = "Password must be at least 8 characters")
+    @Pattern(
+        regexp = "^(?=.*[a-z])(?=.*[A-Z])" +
+                 "(?=.*\\d)(?=.*[@$!%*?&])" +
+                 "[A-Za-z\\d@$!%*?&]{8,}$",
+        message = "Password must have uppercase, lowercase, " +
+                  "number and special character"
+    )
+    private String password;
+
+    @Pattern(
+        regexp = "^[0-9]{10}$",
+        message = "Phone must be 10 digits"
+    )
+    private String phone;
+}
+LoginRequest.java
+javapackage com.leave.user.dto.request;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import lombok.Data;
+
+@Data
+public class LoginRequest {
+
+    @NotBlank(message = "Email is required")
+    @Email(message = "Invalid email format")
+    private String email;
+
+    @NotBlank(message = "Password is required")
+    private String password;
+}
+UpdateProfileRequest.java
+javapackage com.leave.user.dto.request;
+
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+
+@Data
+public class UpdateProfileRequest {
+
+    @Size(min = 3, max = 50,
+          message = "Username must be 3-50 characters")
+    private String username;
+
+    @Pattern(
+        regexp = "^[0-9]{10}$",
+        message = "Phone must be 10 digits"
+    )
+    private String phone;
+}
+UserResponse.java
+javapackage com.leave.user.dto.response;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserResponse {
+    private Long id;
+    private String username;
+    private String email;
+    private String phone;
+    private String role;
+    private boolean isActive;
+    private LocalDateTime createdAt;
+}
+AuthResponse.java
+javapackage com.leave.user.dto.response;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class AuthResponse {
+    private String token;
+    private String tokenType;
+    private Long userId;
+    private String username;
+    private String email;
+    private String role;
+}
+ApiResponse.java
+javapackage com.leave.user.dto.response;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class ApiResponse<T> {
+
+    private boolean success;
+    private String message;
+    private T data;
+    private String error;
+    private LocalDateTime timestamp;
+
+    public static <T> ApiResponse<T> success(
+            String message, T data) {
+        return ApiResponse.<T>builder()
+                .success(true)
+                .message(message)
+                .data(data)
+                .timestamp(LocalDateTime.now())
+                .build();
+    }
+
+    public static <T> ApiResponse<T> success(
+            String message) {
+        return ApiResponse.<T>builder()
+                .success(true)
+                .message(message)
+                .timestamp(LocalDateTime.now())
+                .build();
+    }
+
+    public static <T> ApiResponse<T> failure(
+            String error) {
+        return ApiResponse.<T>builder()
+                .success(false)
+                .error(error)
+                .timestamp(LocalDateTime.now())
+                .build();
+    }
+}
+
+Security — JwtUtil.java
+javapackage com.leave.user.security;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import java.security.Key;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
+
+@Slf4j
+@Component
+public class JwtUtil {
+
+    @Value("${jwt.secret}")
+    private String secret;
+
+    @Value("${jwt.expiration}")
+    private Long expiration;
+
+    private Key getSigningKey() {
+        byte[] keyBytes = secret.getBytes();
+        return Keys.hmacShaKeyFor(keyBytes);
+    }
+
+    public String generateToken(Long userId,
+                                 String email,
+                                 String role) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId);
+        claims.put("role", role);
+
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(email)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(
+                        System.currentTimeMillis()
+                        + expiration))
+                .signWith(getSigningKey())
+                .compact();
+    }
+
+    public String extractEmail(String token) {
+        return extractClaim(token, Claims::getSubject);
+    }
+
+    public Long extractUserId(String token) {
+        return extractClaim(token,
+                claims -> claims.get(
+                        "userId", Long.class));
+    }
+
+    public String extractRole(String token) {
+        return extractClaim(token,
+                claims -> claims.get(
+                        "role", String.class));
+    }
+
+    public boolean isTokenValid(String token) {
+        try {
+            Jwts.parserBuilder()
+                    .setSigningKey(getSigningKey())
+                    .build()
+                    .parseClaimsJws(token);
+            return !isTokenExpired(token);
+        } catch (Exception e) {
+            log.error("Invalid JWT: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private boolean isTokenExpired(String token) {
+        return extractExpiration(token)
+                .before(new Date());
+    }
+
+    private Date extractExpiration(String token) {
+        return extractClaim(token,
+                Claims::getExpiration);
+    }
+
+    private <T> T extractClaim(String token,
+            Function<Claims, T> resolver) {
+        Claims claims = Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+        return resolver.apply(claims);
+    }
+}
+
+Filter — JwtAuthFilter.java
+javapackage com.leave.user.filter;
+
+import com.leave.user.security.JwtUtil;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.authentication
+        .UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority
+        .SimpleGrantedAuthority;
+import org.springframework.security.core.context
+        .SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+import java.util.List;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class JwtAuthFilter extends OncePerRequestFilter {
+
+    private final JwtUtil jwtUtil;
+
+    @Override
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain)
+            throws ServletException, IOException {
+
+        String token = extractToken(request);
+
+        if (token != null
+                && jwtUtil.isTokenValid(token)) {
+            String email = jwtUtil.extractEmail(token);
+            Long userId = jwtUtil.extractUserId(token);
+            String role = jwtUtil.extractRole(token);
+
+            log.debug("Valid JWT — user: {}, role: {}",
+                    email, role);
+
+            UsernamePasswordAuthenticationToken auth =
+                    new UsernamePasswordAuthenticationToken(
+                            userId,
+                            null,
+                            List.of(new SimpleGrantedAuthority(
+                                    role)));
+
+            SecurityContextHolder.getContext()
+                    .setAuthentication(auth);
+        }
+
+        filterChain.doFilter(request, response);
+    }
+
+    private String extractToken(
+            HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
+        if (StringUtils.hasText(header)
+                && header.startsWith("Bearer ")) {
+            return header.substring(7);
+        }
+        return null;
+    }
+}
+
+Config — SecurityConfig.java
+javapackage com.leave.user.config;
+
+import com.leave.user.filter.JwtAuthFilter;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method
+        .configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web
+        .builders.HttpSecurity;
+import org.springframework.security.config.annotation.web
+        .configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web
+        .configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http
+        .SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt
+        .BCryptPasswordEncoder;
+import org.springframework.security.crypto.password
+        .PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication
+        .UsernamePasswordAuthenticationFilter;
+
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
+
+    private final JwtAuthFilter jwtAuthFilter;
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http) throws Exception {
+        http
+            .csrf(AbstractHttpConfigurer::disable)
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(
+                        SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(
+                    "/swagger-ui/**",
+                    "/swagger-ui.html",
+                    "/v3/api-docs/**",
+                    "/actuator/**",
+                    "/api/auth/register",
+                    "/api/auth/login"
+                ).permitAll()
+                .anyRequest().authenticated()
+            )
+            .addFilterBefore(jwtAuthFilter,
+                UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+
+Config — SwaggerConfig.java
+javapackage com.leave.user.config;
+
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class SwaggerConfig {
+
+    @Bean
+    public OpenAPI openAPI() {
+        return new OpenAPI()
+                .info(new Info()
+                        .title("User Service API")
+                        .description(
+                            "Authentication and User " +
+                            "Management Service")
+                        .version("1.0.0")
+                        .contact(new Contact()
+                                .name("Leave Management")
+                                .email("admin@leave.com")))
+                .addSecurityItem(
+                        new SecurityRequirement()
+                                .addList("Bearer Auth"))
+                .components(new Components()
+                        .addSecuritySchemes(
+                                "Bearer Auth",
+                                new SecurityScheme()
+                                        .type(SecurityScheme
+                                                .Type.HTTP)
+                                        .scheme("bearer")
+                                        .bearerFormat("JWT")));
+    }
+}
+
+Exception Classes
+ResourceNotFoundException.java
+javapackage com.leave.user.exception;
+
+public class ResourceNotFoundException
+        extends RuntimeException {
+    public ResourceNotFoundException(String message) {
+        super(message);
+    }
+}
+ResourceAlreadyExistsException.java
+javapackage com.leave.user.exception;
+
+public class ResourceAlreadyExistsException
+        extends RuntimeException {
+    public ResourceAlreadyExistsException(String message) {
+        super(message);
+    }
+}
+InvalidCredentialsException.java
+javapackage com.leave.user.exception;
+
+public class InvalidCredentialsException
+        extends RuntimeException {
+    public InvalidCredentialsException(String message) {
+        super(message);
+    }
+}
+GlobalExceptionHandler.java
+javapackage com.leave.user.exception;
+
+import com.leave.user.dto.response.ApiResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@Slf4j
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotFound(
+            ResourceNotFoundException ex) {
+        log.error("Not found: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.failure(ex.getMessage()));
+    }
+
+    @ExceptionHandler(ResourceAlreadyExistsException.class)
+    public ResponseEntity<ApiResponse<Void>> handleExists(
+            ResourceAlreadyExistsException ex) {
+        log.error("Already exists: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ApiResponse.failure(ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidCreds(
+            InvalidCredentialsException ex) {
+        log.error("Invalid credentials: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.failure(ex.getMessage()));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>>
+            handleValidation(
+                MethodArgumentNotValidException ex) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getAllErrors()
+                .forEach(error -> {
+                    String field =
+                            ((FieldError) error).getField();
+                    String msg =
+                            error.getDefaultMessage();
+                    errors.put(field, msg);
+                });
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.<Map<String, String>>builder()
+                        .success(false)
+                        .error("Validation failed")
+                        .data(errors)
+                        .build());
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleGeneral(
+            Exception ex) {
+        log.error("Unexpected error: {}", ex.getMessage(), ex);
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.failure(
+                        "Something went wrong"));
+    }
+}
+
+Repository — UserRepository.java
+javapackage com.leave.user.repository;
+
+import com.leave.user.model.User;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
+import org.springframework.stereotype.Repository;
+
+import java.sql.PreparedStatement;
+import java.sql.Statement;
+import java.util.Optional;
+
+@Slf4j
+@Repository
+@RequiredArgsConstructor
+public class UserRepository {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    private final RowMapper<User> rowMapper = (rs, rowNum) ->
+            User.builder()
+                    .id(rs.getLong("id"))
+                    .username(rs.getString("username"))
+                    .email(rs.getString("email"))
+                    .passwordHash(rs.getString("password_hash"))
+                    .phone(rs.getString("phone"))
+                    .role(rs.getString("role"))
+                    .isActive(rs.getBoolean("is_active"))
+                    .createdAt(rs.getTimestamp("created_at")
+                            .toLocalDateTime())
+                    .updatedAt(rs.getTimestamp("updated_at")
+                            .toLocalDateTime())
+                    .build();
+
+    public Long save(User user) {
+        log.debug("Saving user: {}", user.getEmail());
+        String sql = """
+                INSERT INTO users
+                (username, email, password_hash,
+                 phone, role, is_active,
+                 created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+                """;
+
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+
+        jdbcTemplate.update(connection -> {
+            PreparedStatement ps =
+                    connection.prepareStatement(
+                            sql,
+                            Statement.RETURN_GENERATED_KEYS);
+            ps.setString(1, user.getUsername());
+            ps.setString(2, user.getEmail());
+            ps.setString(3, user.getPasswordHash());
+            ps.setString(4, user.getPhone());
+            ps.setString(5, user.getRole());
+            ps.setBoolean(6, user.isActive());
+            return ps;
+        }, keyHolder);
+
+        Long id = keyHolder.getKey().longValue();
+        log.debug("User saved with id: {}", id);
+        return id;
+    }
+
+    public Optional<User> findById(Long id) {
+        String sql = "SELECT * FROM users WHERE id = ?";
+        return jdbcTemplate.query(sql, rowMapper, id)
+                .stream().findFirst();
+    }
+
+    public Optional<User> findByEmail(String email) {
+        String sql =
+                "SELECT * FROM users WHERE email = ?";
+        return jdbcTemplate.query(sql, rowMapper, email)
+                .stream().findFirst();
+    }
+
+    public void update(User user) {
+        log.debug("Updating user: {}", user.getId());
+        String sql = """
+                UPDATE users
+                SET username = ?, phone = ?,
+                    updated_at = NOW()
+                WHERE id = ?
+                """;
+        jdbcTemplate.update(sql,
+                user.getUsername(),
+                user.getPhone(),
+                user.getId());
+    }
+
+    public void updateLastLogin(Long userId) {
+        String sql = """
+                UPDATE users
+                SET last_login = NOW()
+                WHERE id = ?
+                """;
+        jdbcTemplate.update(sql, userId);
+    }
+
+    public boolean existsByEmail(String email) {
+        String sql = """
+                SELECT COUNT(*) FROM users
+                WHERE email = ?
+                """;
+        Integer count = jdbcTemplate.queryForObject(
+                sql, Integer.class, email);
+        return count != null && count > 0;
+    }
+
+    public boolean existsByUsername(String username) {
+        String sql = """
+                SELECT COUNT(*) FROM users
+                WHERE username = ?
+                """;
+        Integer count = jdbcTemplate.queryForObject(
+                sql, Integer.class, username);
+        return count != null && count > 0;
+    }
+}
+
+Service — UserService.java
+javapackage com.leave.user.service;
+
+import com.leave.user.dto.request.LoginRequest;
+import com.leave.user.dto.request.RegisterRequest;
+import com.leave.user.dto.request.UpdateProfileRequest;
+import com.leave.user.dto.response.AuthResponse;
+import com.leave.user.dto.response.UserResponse;
+import com.leave.user.exception.InvalidCredentialsException;
+import com.leave.user.exception.ResourceAlreadyExistsException;
+import com.leave.user.exception.ResourceNotFoundException;
+import com.leave.user.model.User;
+import com.leave.user.repository.UserRepository;
+import com.leave.user.security.JwtUtil;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class UserService {
+
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtUtil jwtUtil;
+
+    public UserResponse register(RegisterRequest request) {
+        log.info("Registering user: {}", request.getEmail());
+
+        if (userRepository.existsByEmail(
+                request.getEmail())) {
+            throw new ResourceAlreadyExistsException(
+                    "Email already registered");
+        }
+
+        if (userRepository.existsByUsername(
+                request.getUsername())) {
+            throw new ResourceAlreadyExistsException(
+                    "Username already taken");
+        }
+
+        User user = User.builder()
+                .username(request.getUsername())
+                .email(request.getEmail())
+                .passwordHash(passwordEncoder.encode(
+                        request.getPassword()))
+                .phone(request.getPhone())
+                .role("ROLE_EMPLOYEE")
+                .isActive(true)
+                .build();
+
+        Long id = userRepository.save(user);
+        log.info("User registered with id: {}", id);
+
+        return userRepository.findById(id)
+                .map(this::mapToResponse)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found after creation"));
+    }
+
+    public AuthResponse login(LoginRequest request) {
+        log.info("Login attempt: {}", request.getEmail());
+
+        User user = userRepository
+                .findByEmail(request.getEmail())
+                .orElseThrow(() ->
+                        new InvalidCredentialsException(
+                                "Invalid email or password"));
+
+        if (!user.isActive()) {
+            throw new InvalidCredentialsException(
+                    "Account is inactive");
+        }
+
+        if (!passwordEncoder.matches(
+                request.getPassword(),
+                user.getPasswordHash())) {
+            throw new InvalidCredentialsException(
+                    "Invalid email or password");
+        }
+
+        userRepository.updateLastLogin(user.getId());
+
+        String token = jwtUtil.generateToken(
+                user.getId(),
+                user.getEmail(),
+                user.getRole());
+
+        log.info("Login successful: {}", user.getEmail());
+
+        return AuthResponse.builder()
+                .token(token)
+                .tokenType("Bearer")
+                .userId(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .role(user.getRole())
+                .build();
+    }
+
+    public UserResponse getProfile(Long userId) {
+        log.info("Fetching profile: {}", userId);
+        return userRepository.findById(userId)
+                .map(this::mapToResponse)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found"));
+    }
+
+    public UserResponse updateProfile(
+            Long userId,
+            UpdateProfileRequest request) {
+        log.info("Updating profile: {}", userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found"));
+
+        if (request.getUsername() != null
+                && !request.getUsername()
+                        .equals(user.getUsername())) {
+            if (userRepository.existsByUsername(
+                    request.getUsername())) {
+                throw new ResourceAlreadyExistsException(
+                        "Username already taken");
+            }
+            user.setUsername(request.getUsername());
+        }
+
+        if (request.getPhone() != null) {
+            user.setPhone(request.getPhone());
+        }
+
+        userRepository.update(user);
+
+        return userRepository.findById(userId)
+                .map(this::mapToResponse)
+                .orElseThrow();
+    }
+
+    public UserResponse registerWithRole(
+            RegisterRequest request, String role) {
+        log.info("Registering {} : {}",
+                role, request.getEmail());
+
+        if (userRepository.existsByEmail(
+                request.getEmail())) {
+            throw new ResourceAlreadyExistsException(
+                    "Email already registered");
+        }
+
+        if (userRepository.existsByUsername(
+                request.getUsername())) {
+            throw new ResourceAlreadyExistsException(
+                    "Username already taken");
+        }
+
+        User user = User.builder()
+                .username(request.getUsername())
+                .email(request.getEmail())
+                .passwordHash(passwordEncoder.encode(
+                        request.getPassword()))
+                .phone(request.getPhone())
+                .role(role)
+                .isActive(true)
+                .build();
+
+        Long id = userRepository.save(user);
+
+        return userRepository.findById(id)
+                .map(this::mapToResponse)
+                .orElseThrow();
+    }
+
+    private UserResponse mapToResponse(User user) {
+        return UserResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .role(user.getRole())
+                .isActive(user.isActive())
+                .createdAt(user.getCreatedAt())
+                .build();
+    }
+}
+
+Controllers
+AuthController.java
+javapackage com.leave.user.controller;
+
+import com.leave.user.dto.request.LoginRequest;
+import com.leave.user.dto.request.RegisterRequest;
+import com.leave.user.dto.response.ApiResponse;
+import com.leave.user.dto.response.AuthResponse;
+import com.leave.user.dto.response.UserResponse;
+import com.leave.user.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/auth")
+@RequiredArgsConstructor
+@Tag(name = "Authentication",
+     description = "Register and Login APIs")
+public class AuthController {
+
+    private final UserService userService;
+
+    @Operation(summary = "Register employee",
+               description = "Register new employee account")
+    @PostMapping("/register")
+    public ResponseEntity<ApiResponse<UserResponse>>
+            register(
+                @Valid @RequestBody
+                RegisterRequest request) {
+        log.info("Register request: {}",
+                request.getEmail());
+        UserResponse response =
+                userService.register(request);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success(
+                        "Registration successful",
+                        response));
+    }
+
+    @Operation(summary = "Login",
+               description = "Login and get JWT token")
+    @PostMapping("/login")
+    public ResponseEntity<ApiResponse<AuthResponse>>
+            login(
+                @Valid @RequestBody
+                LoginRequest request) {
+        log.info("Login request: {}",
+                request.getEmail());
+        AuthResponse response =
+                userService.login(request);
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Login successful", response));
+    }
+
+    @Operation(summary = "Register manager",
+               description = "Admin only — register manager")
+    @PostMapping("/register-manager")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<UserResponse>>
+            registerManager(
+                @Valid @RequestBody
+                RegisterRequest request) {
+        UserResponse response =
+                userService.registerWithRole(
+                        request, "ROLE_MANAGER");
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success(
+                        "Manager registered", response));
+    }
+
+    @Operation(summary = "Register HR",
+               description = "Admin only — register HR")
+    @PostMapping("/register-hr")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<UserResponse>>
+            registerHr(
+                @Valid @RequestBody
+                RegisterRequest request) {
+        UserResponse response =
+                userService.registerWithRole(
+                        request, "ROLE_HR");
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success(
+                        "HR registered", response));
+    }
+
+    @Operation(summary = "Register admin",
+               description = "Admin only — register admin")
+    @PostMapping("/register-admin")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<UserResponse>>
+            registerAdmin(
+                @Valid @RequestBody
+                RegisterRequest request) {
+        UserResponse response =
+                userService.registerWithRole(
+                        request, "ROLE_ADMIN");
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success(
+                        "Admin registered", response));
+    }
+}
+UserController.java
+javapackage com.leave.user.controller;
+
+import com.leave.user.dto.request.UpdateProfileRequest;
+import com.leave.user.dto.response.ApiResponse;
+import com.leave.user.dto.response.UserResponse;
+import com.leave.user.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context
+        .SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/users")
+@RequiredArgsConstructor
+@Tag(name = "User Profile",
+     description = "User profile management")
+public class UserController {
+
+    private final UserService userService;
+
+    @Operation(summary = "Get profile",
+               description = "Get logged-in user profile")
+    @GetMapping("/profile")
+    public ResponseEntity<ApiResponse<UserResponse>>
+            getProfile() {
+        Long userId = (Long) SecurityContextHolder
+                .getContext()
+                .getAuthentication()
+                .getPrincipal();
+        log.info("Get profile: {}", userId);
+        UserResponse response =
+                userService.getProfile(userId);
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Profile fetched", response));
+    }
+
+    @Operation(summary = "Update profile",
+               description = "Update username or phone")
+    @PutMapping("/profile")
+    public ResponseEntity<ApiResponse<UserResponse>>
+            updateProfile(
+                @Valid @RequestBody
+                UpdateProfileRequest request) {
+        Long userId = (Long) SecurityContextHolder
+                .getContext()
+                .getAuthentication()
+                .getPrincipal();
+        log.info("Update profile: {}", userId);
+        UserResponse response =
+                userService.updateProfile(userId, request);
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Profile updated", response));
+    }
+}
+
+UserServiceApplication.java
+javapackage com.leave.user;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+
+@SpringBootApplication
+@EnableDiscoveryClient
+@EnableFeignClients
+public class UserServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(
+                UserServiceApplication.class, args);
+    }
+}
+
+Test What We Have
+Start these 3 services in order:
+1. EurekaServerApplication   ▶
+2. UserServiceApplication    ▶
+3. ApiGatewayApplication     ▶
+Check http://localhost:8761 — USER-SERVICE should appear.
+Then test in Postman:
+POST http://localhost:8080/api/auth/register
+{
+    "username": "rahulrao",
+    "email": "rahul@leave.com",
+    "password": "Password@123",
+    "phone": "9876543210"
+}
+Should return 201 Created with user id as a number like 1, 2, 3.
+Then login:
+POST http://localhost:8080/api/auth/login
+{
+    "email": "rahul@leave.com",
+    "password": "Password@123"
+}
+Save the token!
+
+Create all files, start 3 services and test register + login in Postman — tell me when working and we start Employee Service! 🚀
