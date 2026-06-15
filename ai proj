@@ -1,0 +1,48 @@
+Perfect! 🎉 Now let's move fast. Run these one by one in CMD:
+
+---
+
+## Step 1 — Create Project Folder
+```cmd
+mkdir C:\Users\%USERNAME%\agentic-ai-week1
+cd C:\Users\%USERNAME%\agentic-ai-week1
+```
+
+---
+
+## Step 2 — Create Virtual Environment
+```cmd
+python -m venv venv
+```
+Wait a few seconds for it to complete.
+
+---
+
+## Step 3 — Activate It
+```cmd
+venv\Scripts\activate
+```
+
+You should see `(venv)` at the start of your prompt:
+```
+(venv) C:\Users\Rahul\agentic-ai-week1>
+```
+
+---
+
+## Step 4 — Install Packages
+```cmd
+pip install openai langgraph
+```
+This will take 1-2 minutes. Let it finish fully.
+
+---
+
+## Step 5 — Verify Both Installed
+```cmd
+python -c "import openai; import langgraph; print('All good!')"
+```
+
+---
+
+Run them one by one and tell me the output of each step, especially Step 3 (venv prompt) and Step 5 (verification). We're almost ready to write actual code!
