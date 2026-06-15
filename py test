@@ -1,0 +1,17 @@
+import os
+from openai import OpenAI
+
+client = OpenAI()
+
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    max_tokens=50,
+    temperature=0.0,
+    messages=[
+        {"role": "user", "content": "Say: setup complete"}
+    ]
+)
+
+print(response.choices[0].message.content)
+print(f"Finish reason: {response.choices[0].finish_reason}")
+print(f"Tokens used: {response.usage.total_tokens}")
