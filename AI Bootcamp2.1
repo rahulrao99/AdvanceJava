@@ -1,0 +1,43 @@
+import os
+from openai import OpenAI
+
+# ── 1. Initialise the client ─────────────────────────────────────────────
+# OpenAI() reads OPENAI_API_KEY from environment automatically.
+# Never pass the key as a string literal.
+client = OpenAI()
+
+# ── 2. Make the API call ─────────────────────────────────────────────────
+response = client.chat.completions.create(
+    model="gpt-4o",
+    max_tokens=1024,
+    temperature=0.0,
+    messages=[
+        {
+            "role": "system",
+            "content": (
+                "You are a senior Python developer with 10+ years of experience. "
+                "You write clean, production-ready code with type hints and docstrings. "
+                "You NEVER include explanatory prose — only code."
+            )
+        },
+        {
+            "role": "user",
+            "content": (
+                "Write a Python function to compute the nth Fibonacci number "
+                "using memoisation. Include type hints and a docstring."
+            )
+        }
+    ]
+)
+
+# ── 3. Extract the response text ──────────────────────────────────────────
+generated_code = response.choices[0].message.content
+print(generated_code)
+
+# ── 4. Inspect the full response metadata ────────────────────────────────
+print(f"\n─── Response Metadata ───────────────")
+print(f"Model used:         {response.model}")
+print(f"Finish reason:      {response.choices[0].finish_reason}")
+print(f"Prompt tokens:      {response.usage.prompt_tokens}")
+print(f"Completion tokens:  {response.usage.completion_tokens}")
+print(f"Total tokens:       {response.usage.total_tokens}")
