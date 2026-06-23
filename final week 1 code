@@ -1,0 +1,378 @@
+Here's the complete, final notebook — all cells, ready to copy in exactly as shown. No partial edits, this replaces everything in `starter_notebook.ipynb`.
+
+---
+
+## Cell 1 — Install Dependencies
+
+```python
+# Cell 1 — Install dependencies mentioned in requirements.txt file
+!pip install -r requirements.txt python-dotenv ipykernel
+```
+
+---
+
+## Cell 2 — Imports and API Key Setup
+
+```python
+# Cell 2 — Imports and API key setup
+import os
+import subprocess
+import sys
+import textwrap
+import tempfile
+import pathlib
+from typing import TypedDict, Optional
+
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.graph import StateGraph, END
+
+# Load OPENAI_API_KEY from a .env file in this directory (or parent)
+load_dotenv()
+
+# Verify the key is present — if this prints 'NOT SET', add it to your .env file
+api_key_status = 'SET' if os.getenv('OPENAI_API_KEY') else 'NOT SET'
+print(f'OPENAI_API_KEY: {api_key_status}')
+
+# Initialise the LLM — use temperature=0 for deterministic outputs during demos
+llm = ChatOpenAI(
+    model='gpt-4o',
+    temperature=0,
+    max_tokens=4096,
+)
+print('LLM initialised:', llm.model_name)
+```
+
+---
+
+## Cell 3 — Mock Jira Tickets
+
+```python
+# Cell 3 — Mock Jira tickets
+# These are the three practice tickets. Pick one for your pipeline run in Cell 5.
+
+TICKETS = [
+    {
+        "id": "DATA-001",
+        "summary": "ISO date parser utility",
+        "description": """
+        Write a function `parse_iso_date(date_str: str) -> dict` that:
+        - Accepts a string in ISO 8601 format (e.g. '2024-03-15T14:30:00Z')
+        - Returns a dict with keys: year, month, day, hour, minute, second, timezone
+        - Raises ValueError with a helpful message for invalid inputs
+        - Includes at least 3 example calls in the __main__ block
+        """,
+    },
+    {
+        "id": "DATA-002",
+        "summary": "Binary search implementation",
+        "description": """
+        Write a function `binary_search(arr: list[int], target: int) -> int` that:
+        - Searches a sorted list for target
+        - Returns the index if found, or -1 if not found
+        - Uses iterative (not recursive) implementation
+        - Includes a __main__ block that tests edge cases:
+          empty list, single element, first element, last element, not found
+        """,
+    },
+    {
+        "id": "DATA-003",
+        "summary": "CSV row counter utility",
+        "description": """
+        Write a function `count_csv_rows(filepath: str, skip_header: bool = True) -> int` that:
+        - Reads a CSV file and returns the number of data rows
+        - When skip_header=True (default), excludes the first row from the count
+        - Raises FileNotFoundError if the path doesn't exist
+        - Raises ValueError if the file is empty
+        - In __main__, create a small in-memory CSV, write it to a temp file,
+          run the function, and print the result
+        """,
+    },
+]
+
+# Preview all tickets
+for t in TICKETS:
+    print(f"[{t['id']}] {t['summary']}")
+```
+
+---
+
+## Cell 4 — Build the State Graph (All TODOs Filled In + DEMO_MODE)
+
+```python
+# Cell 4 — Build the state graph
+# Complete each TODO below. Hints reference the LangGraph docs.
+
+sys.path.append(str(pathlib.Path.cwd().parent / "implementation"))
+
+from node import create_plan, create_code
+from prompts import PLANNER_SYSTEM, CODER_SYSTEM, ERROR_RETRY_SYSTEM
+
+# DEMO_MODE forces the first Coder attempt to produce broken code,
+# guaranteeing a visible retry cycle in the terminal output.
+DEMO_MODE = os.getenv("DEMO_MODE", "off") == "mock"
+
+
+# ---------------------------------------------------------------------------
+# TODO 1: Define the State TypedDict
+# Hint: TypedDict gives LangGraph a schema to validate state updates.
+# Fields needed: jira_ticket, plan, generated_code,
+#                execution_output, error, retry_count
+# ---------------------------------------------------------------------------
+class CoderState(TypedDict):
+    jira_ticket: str
+    plan: str
+    generated_code: str
+    execution_output: str
+    error: Optional[str]
+    retry_count: int
+
+
+# ---------------------------------------------------------------------------
+# TODO 2: Write the planner node
+# Hint: A node is a function (state: YourState) -> YourState.
+#       Call llm.invoke([SystemMessage(...), HumanMessage(...)]) and
+#       return {**state, 'plan': response.content.strip()}
+# ---------------------------------------------------------------------------
+def planner(state: CoderState) -> CoderState:
+    """Call GPT-4o with PLANNER_SYSTEM and the jira_ticket, store result in 'plan'."""
+    plan = create_plan(llm, state["jira_ticket"])
+    return {**state, "plan": plan}
+
+
+# ---------------------------------------------------------------------------
+# TODO 3: Write the coder node
+# Hint: Check state['error'] — if set, use the retry prompt that
+#       injects the traceback. Otherwise use the standard coder prompt.
+#       Strip markdown fences if the model adds them despite your prompt.
+# ---------------------------------------------------------------------------
+def coder(state: CoderState) -> CoderState:
+    """Call GPT-4o to write Python code; handle both first-attempt and retry."""
+
+    # DEMO_MODE: force the very first attempt to be broken code,
+    # so the retry cycle is guaranteed to appear in the output.
+    if DEMO_MODE and state.get("retry_count", 0) == 0 and not state.get("error"):
+        broken_code = (
+            "def main():\n"
+            "    total = 0\n"
+            "    for i in range(10)\n"   # missing colon -> guaranteed SyntaxError
+            "        total += i\n"
+            "    print(total)\n\n"
+            "main()\n"
+        )
+        print("[CODER] DEMO_MODE active — injecting deliberately broken code.")
+        return {**state, "generated_code": broken_code}
+
+    if state.get("error"):
+        system_msg = ERROR_RETRY_SYSTEM
+        human_msg = (
+            f"Implementation plan:\n{state['plan']}\n\n"
+            f"Previous code:\n{state['generated_code']}\n\n"
+            f"Traceback:\n{state['error']}"
+        )
+    else:
+        system_msg = CODER_SYSTEM
+        human_msg = f"Implementation plan:\n{state['plan']}"
+
+    code = create_code(llm, system_msg, human_msg)
+    return {**state, "generated_code": code}
+
+
+# ---------------------------------------------------------------------------
+# TODO 4: Write the compiler node
+# Hint: Write generated_code to a tempfile, run subprocess.run(
+#       [sys.executable, tmp_path], capture_output=True, timeout=30)
+#       Check result.returncode; store error or execution_output.
+# ---------------------------------------------------------------------------
+def compiler(state: CoderState) -> CoderState:
+    """Execute generated_code; store stdout or traceback."""
+    print("\n[COMPILER] Executing generated code...")
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".py", delete=False
+        ) as tmp:
+            tmp.write(state["generated_code"])
+            tmp_path = tmp.name
+
+        result = subprocess.run(
+            [sys.executable, tmp_path],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        if result.returncode == 0:
+            print(f"[COMPILER] SUCCESS. Output:\n{result.stdout}")
+            return {**state, "execution_output": result.stdout, "error": None}
+        else:
+            print(f"[COMPILER] FAILED. Traceback:\n{result.stderr}")
+            return {**state, "execution_output": "", "error": result.stderr}
+
+    except subprocess.TimeoutExpired:
+        print("[COMPILER] TIMEOUT after 30 seconds.")
+        return {
+            **state,
+            "execution_output": "",
+            "error": "TimeoutExpired: execution exceeded 30 seconds.",
+        }
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# TODO 5: Write the error_handler node
+# Hint: This node just increments retry_count and prints a message.
+#       Return {**state, 'retry_count': state['retry_count'] + 1}
+# ---------------------------------------------------------------------------
+def error_handler(state: CoderState) -> CoderState:
+    """Increment retry_count so the coder knows it's a retry."""
+    new_count = state["retry_count"] + 1
+    print(f"\n[ERROR_HANDLER] Retry {new_count}/3 triggered. Routing back to CODER.")
+    return {**state, "retry_count": new_count}
+
+
+# ---------------------------------------------------------------------------
+# TODO 6: Write the conditional edge function
+# Hint: Return a string matching one of the keys in the mapping dict
+#       you'll pass to add_conditional_edges().
+#       Logic: if error AND retry_count < 3 -> 'error_handler' else -> 'end'
+# ---------------------------------------------------------------------------
+def should_retry(state: CoderState) -> str:
+    """Decide whether to retry or end."""
+    if state.get("error") and state["retry_count"] < 3:
+        return "error_handler"
+    return "end"
+
+
+# ---------------------------------------------------------------------------
+# TODO 7: Assemble the StateGraph
+# Hint:
+#   graph = StateGraph(CoderState)
+#   graph.add_node('planner', planner)        # register each node
+#   graph.add_edge('planner', 'coder')         # linear edge
+#   graph.add_conditional_edges('compiler', should_retry, {...})
+#   graph.set_entry_point('planner')
+#   app = graph.compile()
+# ---------------------------------------------------------------------------
+def build_graph():
+    """Build and compile the StateGraph."""
+    graph = StateGraph(CoderState)
+
+    graph.add_node("planner", planner)
+    graph.add_node("coder", coder)
+    graph.add_node("compiler", compiler)
+    graph.add_node("error_handler", error_handler)
+
+    graph.set_entry_point("planner")
+    graph.add_edge("planner", "coder")
+    graph.add_edge("coder", "compiler")
+    graph.add_conditional_edges(
+        "compiler",
+        should_retry,
+        {"error_handler": "error_handler", "end": END},
+    )
+    graph.add_edge("error_handler", "coder")
+
+    app = graph.compile()
+    return app
+
+
+print("Node and graph functions defined. Proceed to Cell 5 to run.")
+```
+
+---
+
+## Cell 5 — Run the Pipeline (Normal / Happy Path)
+
+```python
+# Cell 5 — Run the pipeline
+# Pick a ticket index (0, 1, or 2) from TICKETS defined in Cell 3.
+
+SELECTED_TICKET_INDEX = 0  # Change this to try a different ticket
+
+ticket = TICKETS[SELECTED_TICKET_INDEX]
+ticket_text = f"[{ticket['id']}] {ticket['summary']}\n{ticket['description']}"
+
+print(f'Running pipeline for ticket: {ticket["id"]} — {ticket["summary"]}')
+print('=' * 60)
+
+# Build the graph (calls your build_graph() from Cell 4)
+app = build_graph()
+
+# Seed state
+initial_state: CoderState = {
+    'jira_ticket': ticket_text,
+    'plan': '',
+    'generated_code': '',
+    'execution_output': '',
+    'error': None,
+    'retry_count': 0,
+}
+
+final_state = app.invoke(initial_state)
+
+print('\n' + '=' * 60)
+if final_state.get('error'):
+    print('PIPELINE FAILED after max retries.')
+    print('Last error:', final_state['error'])
+else:
+    print(f'PIPELINE SUCCEEDED (retries: {final_state["retry_count"]})')
+    print('\nOutput:\n', final_state['execution_output'])
+
+print('\n--- Generated Code ---')
+print(final_state['generated_code'])
+```
+
+---
+
+## Cell 6 — Demo Run Forcing a Retry Cycle (Submission Evidence)
+
+```python
+# Cell 6 — Demo run forcing a retry cycle (for submission evidence)
+os.environ["DEMO_MODE"] = "mock"
+
+ticket = TICKETS[SELECTED_TICKET_INDEX]
+ticket_text = f"[{ticket['id']}] {ticket['summary']}\n{ticket['description']}"
+
+print(f'Running DEMO pipeline for ticket: {ticket["id"]} — {ticket["summary"]}')
+print('=' * 60)
+
+# Rebuild graph and re-read DEMO_MODE
+DEMO_MODE = True
+app_demo = build_graph()
+
+demo_initial_state: CoderState = {
+    'jira_ticket': ticket_text,
+    'plan': '',
+    'generated_code': '',
+    'execution_output': '',
+    'error': None,
+    'retry_count': 0,
+}
+
+demo_final_state = app_demo.invoke(demo_initial_state)
+
+print('\n' + '=' * 60)
+if demo_final_state.get('error'):
+    print('PIPELINE FAILED after max retries.')
+    print('Last error:', demo_final_state['error'])
+else:
+    print(f'PIPELINE SUCCEEDED (retries: {demo_final_state["retry_count"]})')
+    print('\nOutput:\n', demo_final_state['execution_output'])
+
+os.environ["DEMO_MODE"] = "off"  # reset for safety
+```
+
+> Note: I added `DEMO_MODE = True` directly before calling `build_graph()` in Cell 6 as a safeguard, since the `DEMO_MODE` variable in Cell 4 is only read once at module-load time. This guarantees the override takes effect even if Cell 4 was already run before setting the env var.
+
+---
+
+## Execution Order
+
+Run cells **1 → 2 → 3 → 4 → 5 → 6** in that exact order, top to bottom, using `Shift+Enter`. Make sure you're on hotspot for Cells 1, 2, 5, and 6 (anything touching PyPI or OpenAI).
+
+Run them all and share Cell 5's and Cell 6's output — that confirms both the happy path and the retry-cycle evidence are working.
