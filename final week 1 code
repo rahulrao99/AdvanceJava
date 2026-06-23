@@ -376,3 +376,17 @@ os.environ["DEMO_MODE"] = "off"  # reset for safety
 Run cells **1 → 2 → 3 → 4 → 5 → 6** in that exact order, top to bottom, using `Shift+Enter`. Make sure you're on hotspot for Cells 1, 2, 5, and 6 (anything touching PyPI or OpenAI).
 
 Run them all and share Cell 5's and Cell 6's output — that confirms both the happy path and the retry-cycle evidence are working.
+
+
+
+
+
+
+
+
+# Cell 7 — Visualize the graph structure
+from IPython.display import Image, display
+
+app_viz = build_graph()
+display(Image(app_viz.get_graph().draw_mermaid_png()))
+
