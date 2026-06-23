@@ -1,0 +1,243 @@
+Good — so `node.py` only has two functions: `create_plan()` and `create_code()`. The compiler/execution logic must live **inside the notebook itself** (in the TODO 4 cell), not in `node.py`. That actually matches the starter notebook structure we saw earlier — TODO 4 said "write the compiler node" directly in the notebook.
+
+Now I have everything needed. Let's write the complete solution matching this exact reference style.
+
+---
+
+## Step 1 — Open `starter_notebook.ipynb` and Fill In Cell 2
+
+This stays mostly as before, but let's make sure it imports from the `implementation` folder too, since we're reusing `node.py` and `prompts.py`.
+
+```python
+# Cell 2 — Imports and API key setup
+import os
+import subprocess
+import sys
+import textwrap
+import tempfile
+import pathlib
+from typing import TypedDict, Optional
+
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.graph import StateGraph, END
+
+# Load OPENAI_API_KEY from a .env file in this directory (or parent)
+load_dotenv()
+
+api_key_status = 'SET' if os.getenv('OPENAI_API_KEY') else 'NOT SET'
+print(f'OPENAI_API_KEY: {api_key_status}')
+
+llm = ChatOpenAI(
+    model='gpt-4o',
+    temperature=0,
+    max_tokens=4096,
+)
+print('LLM initialised:', llm.model_name)
+```
+
+Run it.
+
+---
+
+## Step 2 — Cell 3 stays as-is (TICKETS list, already provided)
+
+Run it.
+
+---
+
+## Cell 4 — All 5 TODOs, Matching the Reference Style
+
+```python
+# Cell 4 — Build the state graph
+# Complete each TODO below. Hints reference the LangGraph docs.
+
+import sys
+sys.path.append(str(pathlib.Path.cwd().parent / "implementation"))
+
+from node import create_plan, create_code
+from prompts import PLANNER_SYSTEM, CODER_SYSTEM, ERROR_RETRY_SYSTEM
+
+
+# ---------------------------------------------------------------------------
+# TODO 1: Define the State TypedDict
+# ---------------------------------------------------------------------------
+class CoderState(TypedDict):
+    jira_ticket: str
+    plan: str
+    generated_code: str
+    execution_output: str
+    error: Optional[str]
+    retry_count: int
+
+
+# ---------------------------------------------------------------------------
+# TODO 2: Write the planner node
+# Uses create_plan() from node.py
+# ---------------------------------------------------------------------------
+def planner(state: CoderState) -> CoderState:
+    """Call GPT-4o with PLANNER_SYSTEM and the jira_ticket, store result in 'plan'."""
+    plan = create_plan(llm, state["jira_ticket"])
+    return {**state, "plan": plan}
+
+
+# ---------------------------------------------------------------------------
+# TODO 3: Write the coder node
+# Uses create_code() from node.py — switches prompt depending on retry state
+# ---------------------------------------------------------------------------
+def coder(state: CoderState) -> CoderState:
+    """Call GPT-4o to write Python code; handle both first-attempt and retry."""
+    if state.get("error"):
+        system_msg = ERROR_RETRY_SYSTEM
+        human_msg = (
+            f"Implementation plan:\n{state['plan']}\n\n"
+            f"Previous code:\n{state['generated_code']}\n\n"
+            f"Traceback:\n{state['error']}"
+        )
+    else:
+        system_msg = CODER_SYSTEM
+        human_msg = f"Implementation plan:\n{state['plan']}"
+
+    code = create_code(llm, system_msg, human_msg)
+    return {**state, "generated_code": code}
+
+
+# ---------------------------------------------------------------------------
+# TODO 4: Write the compiler node
+# ---------------------------------------------------------------------------
+def compiler(state: CoderState) -> CoderState:
+    """Execute generated_code; store stdout or traceback."""
+    print("\n[COMPILER] Executing generated code...")
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".py", delete=False
+        ) as tmp:
+            tmp.write(state["generated_code"])
+            tmp_path = tmp.name
+
+        result = subprocess.run(
+            [sys.executable, tmp_path],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        if result.returncode == 0:
+            print(f"[COMPILER] SUCCESS. Output:\n{result.stdout}")
+            return {**state, "execution_output": result.stdout, "error": None}
+        else:
+            print(f"[COMPILER] FAILED. Traceback:\n{result.stderr}")
+            return {**state, "execution_output": "", "error": result.stderr}
+
+    except subprocess.TimeoutExpired:
+        print("[COMPILER] TIMEOUT after 30 seconds.")
+        return {
+            **state,
+            "execution_output": "",
+            "error": "TimeoutExpired: execution exceeded 30 seconds.",
+        }
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# TODO 5: Write the error_handler node
+# ---------------------------------------------------------------------------
+def error_handler(state: CoderState) -> CoderState:
+    """Increment retry_count so the coder knows it's a retry."""
+    new_count = state["retry_count"] + 1
+    print(f"\n[ERROR_HANDLER] Retry {new_count}/3 triggered. Routing back to CODER.")
+    return {**state, "retry_count": new_count}
+
+
+# ---------------------------------------------------------------------------
+# TODO 6: Write the conditional edge function
+# ---------------------------------------------------------------------------
+def should_retry(state: CoderState) -> str:
+    """Decide whether to retry or end."""
+    if state.get("error") and state["retry_count"] < 3:
+        return "error_handler"
+    return "end"
+
+
+# ---------------------------------------------------------------------------
+# TODO 7: Assemble the StateGraph
+# ---------------------------------------------------------------------------
+def build_graph():
+    """Build and compile the StateGraph."""
+    graph = StateGraph(CoderState)
+
+    graph.add_node("planner", planner)
+    graph.add_node("coder", coder)
+    graph.add_node("compiler", compiler)
+    graph.add_node("error_handler", error_handler)
+
+    graph.set_entry_point("planner")
+    graph.add_edge("planner", "coder")
+    graph.add_edge("coder", "compiler")
+    graph.add_conditional_edges(
+        "compiler",
+        should_retry,
+        {"error_handler": "error_handler", "end": END},
+    )
+    graph.add_edge("error_handler", "coder")
+
+    app = graph.compile()
+    return app
+
+
+print("Node and graph functions defined. Proceed to Cell 5 to run.")
+```
+
+Run it. Should print `Node and graph functions defined. Proceed to Cell 5 to run.`
+
+---
+
+## Cell 5 — Run the Pipeline (unchanged from before)
+
+```python
+# Cell 5 — Run the pipeline
+SELECTED_TICKET_INDEX = 0  # Change this to try a different ticket
+
+ticket = TICKETS[SELECTED_TICKET_INDEX]
+ticket_text = f"[{ticket['id']}] {ticket['summary']}\n{ticket['description']}"
+
+print(f'Running pipeline for ticket: {ticket["id"]} — {ticket["summary"]}')
+print('=' * 60)
+
+app = build_graph()
+
+initial_state: CoderState = {
+    'jira_ticket': ticket_text,
+    'plan': '',
+    'generated_code': '',
+    'execution_output': '',
+    'error': None,
+    'retry_count': 0,
+}
+
+final_state = app.invoke(initial_state)
+
+print('\n' + '=' * 60)
+if final_state.get('error'):
+    print('PIPELINE FAILED after max retries.')
+    print('Last error:', final_state['error'])
+else:
+    print(f'PIPELINE SUCCEEDED (retries: {final_state["retry_count"]})')
+    print('\nOutput:\n', final_state['execution_output'])
+
+print('\n--- Generated Code ---')
+print(final_state['generated_code'])
+```
+
+Run it.
+
+---
+
+One thing to verify — the `sys.path.append` line in Cell 4 assumes `implementation/` is a **sibling** folder to `assignment/` (which matches your folder tree: both sit directly under `agentic-ai-learning-week-1`). 
+
+Run all 5 cells in order and share the output of Cell 5 — let's see if it completes end-to-end on the first try.
