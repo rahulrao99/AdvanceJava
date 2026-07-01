@@ -1,0 +1,193 @@
+import sys
+import os
+import logging
+from datetime import datetime
+from pathlib import Path
+
+from mcp.server.fastmcp import FastMCP
+
+# ------------------------------------------------------------------------
+# Logging setup — logs go to stderr, NEVER stdout.
+# stdout is reserved for MCP's JSON-RPC protocol messages (the actual
+# tool-call requests/responses between client and server). If we printed
+# logs to stdout, we'd corrupt those messages and break the connection.
+# ------------------------------------------------------------------------
+logging.basicConfig(
+    stream=sys.stderr,
+    level=logging.INFO,
+    format="[%(asctime)s] %(levelname)s - %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger(__name__)
+
+# ------------------------------------------------------------------------
+# Sandbox root
+# ------------------------------------------------------------------------
+# Every file operation this server performs is restricted to this directory.
+# You can override it with the MCP_SANDBOX_ROOT env var; otherwise it
+# defaults to a "mock_buggy_repo" folder sitting next to this script.
+SANDBOX_ROOT = Path(
+    os.environ.get("MCP_SANDBOX_ROOT", Path(__file__).parent / "mock_buggy_repo")
+).resolve()
+
+mcp = FastMCP("FileWorkspace")
+
+log.info(f"MCP server '{mcp.name}' initialised")
+log.info(f"Sandbox root: {SANDBOX_ROOT}")
+
+
+def safe_resolve(relative_path: str) -> Path:
+    """
+    Resolve a path requested by the agent and guarantee it stays inside
+    SANDBOX_ROOT.
+
+    Why resolve() and not startswith()?
+    resolve() collapses ".." segments and follows symlinks, giving us the
+    TRUE final absolute path. A simple string check like
+    startswith(str(SANDBOX_ROOT)) can be tricked — e.g. a sibling folder
+    named "mock_buggy_repo_evil" would pass a startswith() check but is
+    NOT inside the sandbox. Comparing resolved Path objects closes that
+    loophole.
+
+    Raises PermissionError if the resolved path escapes the sandbox.
+    """
+    candidate = (SANDBOX_ROOT / relative_path).resolve()
+    if not (candidate == SANDBOX_ROOT or SANDBOX_ROOT in candidate.parents):
+        raise PermissionError(
+            f"Path '{relative_path}' resolves outside the sandbox root "
+            f"({SANDBOX_ROOT}). Access denied."
+        )
+    return candidate
+
+
+# ------------------------------------------------------------------------
+# Tool 1 — list_files
+# ------------------------------------------------------------------------
+@mcp.tool()
+def list_files(path: str = ".") -> str:
+    """List all files and directories under the sandbox root.
+
+    Args:
+        path (str): Relative path (from the sandbox root) to list.
+                     Defaults to "." (the sandbox root itself).
+
+    Returns:
+        str: Newline-separated list of file/directory names, or an
+             error message if the path is invalid or inaccessible.
+    """
+    log.info(f"Tool called: list_files(path={path!r})")
+    try:
+        target = safe_resolve(path)
+        if not target.exists():
+            return f"Error: path '{path}' does not exist."
+        if not target.is_dir():
+            return f"Error: path '{path}' is not a directory."
+
+        entries = sorted(p.name + ("/" if p.is_dir() else "") for p in target.iterdir())
+        result = "\n".join(entries) if entries else "(empty directory)"
+        log.info(f"Tool result: list_files -> {len(entries)} entries")
+        return result
+    except PermissionError as e:
+        log.error(f"list_files denied: {e}")
+        return f"Error: {e}"
+    except Exception as e:
+        log.error(f"list_files failed: {type(e).__name__}: {e}")
+        return f"Error: {type(e).__name__}: {e}"
+
+
+# ------------------------------------------------------------------------
+# Tool 2 — read_file
+# ------------------------------------------------------------------------
+@mcp.tool()
+def read_file(path: str) -> str:
+    """Read the full contents of a file inside the sandbox.
+
+    Args:
+        path (str): Relative path (from the sandbox root) of the file to read.
+
+    Returns:
+        str: The file's text contents, or an error message if the file
+             cannot be read (missing, is a directory, not UTF-8, etc).
+    """
+    log.info(f"Tool called: read_file(path={path!r})")
+    try:
+        target = safe_resolve(path)
+        if not target.exists():
+            return f"Error: file '{path}' does not exist."
+        if target.is_dir():
+            return f"Error: '{path}' is a directory, not a file."
+
+        # errors="replace" avoids a crash on non-UTF-8 / binary files
+        # (e.g. a stray .pyc or image someone drops in the sandbox) —
+        # instead of raising UnicodeDecodeError, we substitute the
+        # unreadable bytes and let the caller decide what to do.
+        content = target.read_text(encoding="utf-8", errors="replace")
+        log.info(f"Tool result: read_file -> {len(content)} characters")
+        return content
+    except PermissionError as e:
+        log.error(f"read_file denied: {e}")
+        return f"Error: {e}"
+    except Exception as e:
+        log.error(f"read_file failed: {type(e).__name__}: {e}")
+        return f"Error: {type(e).__name__}: {e}"
+
+
+# ------------------------------------------------------------------------
+# Tool 3 — write_file
+# ------------------------------------------------------------------------
+@mcp.tool()
+def write_file(path: str, content: str) -> str:
+    """Write (or overwrite) a file inside the sandbox with the given content.
+    Creates any missing parent directories automatically.
+
+    Args:
+        path (str): Relative path (from the sandbox root) to write to.
+        content (str): Text content to write to the file.
+
+    Returns:
+        str: A confirmation message with character count, or an error
+             message if the write failed.
+    """
+    log.info(f"Tool called: write_file(path={path!r}, content_len={len(content)})")
+    try:
+        target = safe_resolve(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+        msg = f"Successfully wrote {len(content)} characters to '{path}'."
+        log.info(f"Tool result: write_file -> {msg}")
+        return msg
+    except PermissionError as e:
+        log.error(f"write_file denied: {e}")
+        return f"Error: {e}"
+    except Exception as e:
+        log.error(f"write_file failed: {type(e).__name__}: {e}")
+        return f"Error: {type(e).__name__}: {e}"
+
+
+# ------------------------------------------------------------------------
+# Entry point
+# ------------------------------------------------------------------------
+if __name__ == "__main__":
+    registered_tools = list(mcp._tool_manager._tools.keys())
+
+    log.info("=" * 50)
+    log.info("  MCP Server Starting")
+    log.info(f"  Name        : {mcp.name}")
+    log.info(f"  Tools       : {', '.join(registered_tools)}")
+    log.info(f"  Sandbox root: {SANDBOX_ROOT}")
+    log.info(f"  Started     : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    log.info(f"  Transport   : stdio (communicating via stdin/stdout)")
+    log.info("=" * 50)
+
+    try:
+        mcp.run()
+    except KeyboardInterrupt:
+        log.info("Server stopped by user (KeyboardInterrupt)")
+    except Exception as e:
+        log.error(f"Server crashed: {type(e).__name__}: {e}")
+        raise
+    finally:
+        log.info("=" * 50)
+        log.info("  MCP Server Stopped")
+        log.info(f"  Stopped : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        log.info("=" * 50)
