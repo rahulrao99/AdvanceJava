@@ -1,0 +1,91 @@
+def format_greeting(name: str, age: int) -> str:
+    """
+    Return a formatted greeting string.
+
+    Parameters
+    ----------
+    name : Person's name (string).
+    age  : Person's age (integer).
+
+    Returns
+    -------
+    str : A greeting like "Hello, Alice! You are 30 years old."
+
+    Example
+    -------
+    >>> format_greeting("Alice", 30)
+    'Hello, Alice! You are 30 years old.'
+    """
+    # BUG 1: %d expects an integer but 'name' is a string — TypeError at runtime.
+    # Should be: return f"Hello, {name}! You are {age} years old."
+    return "Hello, %d! You are %d years old." % (name, age)
+
+
+def count_words(text: str) -> int:
+    """
+    Count the number of words in a string.
+    Words are separated by whitespace (spaces, tabs, newlines).
+
+    Parameters
+    ----------
+    text : Input string.
+
+    Returns
+    -------
+    int : Number of words. Returns 0 for empty strings.
+
+    Example
+    -------
+    >>> count_words("the quick brown fox")
+    4
+    """
+    if not text or not text.strip():
+        return 0
+    # BUG 2: .split(",") splits on commas, not whitespace.
+    # For "the quick brown fox" this returns ["the quick brown fox"] -> length 1.
+    # Should be: return len(text.split())
+    return len(text.split(","))
+
+
+def truncate_string(text: str, max_length: int, suffix: str = "...") -> str:
+    """
+    Truncate a string to a maximum length, appending a suffix if truncated.
+
+    Parameters
+    ----------
+    text       : Input string.
+    max_length : Maximum allowed length of the returned string (including suffix).
+    suffix     : String appended when truncation occurs (default "...").
+
+    Returns
+    -------
+    str : Original string if short enough; truncated string with suffix otherwise.
+    """
+    if len(text) <= max_length:
+        return text
+    cut = max_length - len(suffix)
+    if cut <= 0:
+        return suffix[:max_length]
+    return text[:cut] + suffix
+
+
+if __name__ == "__main__":
+    # These calls exercise both bugs.
+    print("=== format_greeting tests ===")
+    try:
+        result = format_greeting("Alice", 30)
+        print(f"Greeting: {result}")
+    except TypeError as e:
+        # Bug 1 will cause this branch to execute
+        print(f"ERROR in format_greeting: {e}")
+
+    print("\n=== count_words tests ===")
+    sentence = "the quick brown fox jumps over the lazy dog"
+    count = count_words(sentence)
+    # Bug 2: will print 1 instead of 9
+    print(f"Word count for '{sentence}': {count} (expected 9)")
+
+    print("\n=== truncate_string tests (no bugs) ===")
+    long_text = "This is a very long string that needs to be truncated"
+    print(truncate_string(long_text, 20))
+    print(truncate_string("short", 20))
