@@ -1,0 +1,65 @@
+Feature Request — Week 3 Starter Exercise
+==========================================
+
+Add a function called `process_transactions` that takes a list of transaction
+dicts (each with 'amount', 'currency', 'timestamp') and returns a summary dict
+with total_amount, transaction_count, and currencies_used.
+
+Detailed requirements:
+-----------------------
+1. Function signature:
+        process_transactions(transactions: list[dict]) -> dict
+
+2. Input:
+   - A list of dicts, where each dict has these keys:
+        'amount'    : float - the transaction value
+        'currency'  : str   - ISO 4217 currency code (e.g. "USD", "EUR", "GBP")
+        'timestamp' : str   - ISO 8601 datetime string (e.g. "2024-03-15T14:30:00Z")
+
+3. Output dict keys:
+   - 'total_amount'     : float - sum of all transaction amounts
+   - 'transaction_count': int   - number of transactions processed
+   - 'currencies_used'  : list[str] - unique currency codes, sorted alphabetically
+
+4. Error handling:
+   - Raise ValueError if the input list is empty
+   - Raise KeyError (with a helpful message) if any transaction dict is missing
+     a required key ('amount', 'currency', or 'timestamp')
+
+5. Architecture guidelines (all must be satisfied for APPROVED verdict):
+   - snake_case naming
+   - Type hints on all parameters and return value
+   - Docstring describing what the function does, its parameters, return value,
+     and exceptions raised
+   - No global mutable state
+   - Function body must not exceed 30 lines
+   - No bare except clauses
+   - All imports at the top of the file
+
+6. The function must be self-contained in a single Python file
+   (do not split across modules for this exercise).
+
+Example input:
+--------------
+transactions = [
+    {"amount": 100.0, "currency": "USD", "timestamp": "2024-01-15T10:00:00Z"},
+    {"amount": 250.5, "currency": "EUR", "timestamp": "2024-01-15T11:30:00Z"},
+    {"amount": 75.0,  "currency": "USD", "timestamp": "2024-01-15T12:00:00Z"},
+]
+
+Expected output:
+----------------
+{
+    "total_amount": 425.5,
+    "transaction_count": 3,
+    "currencies_used": ["EUR", "USD"]  # sorted alphabetically
+}
+
+Notes for students:
+--------------------
+- Pass this feature_request.txt content as the feature_request field in your SwarmState
+- Watch the Reviewer agent check each architecture guideline systematically
+- If your swarm triggers the graceful_degrader, read the escalation report to see
+  which guideline the Coder kept missing
+- Try intentionally removing a type hint from the Coder system prompt and observe
+  how many extra iterations it takes before the code is APPROVED
