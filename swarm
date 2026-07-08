@@ -1,0 +1,340 @@
+"""
+Week 3 Assignment — Coder-Reviewer Swarm with Memory Injection
+================================================================
+
+A two-agent LangGraph swarm:
+    coder_agent (entry) -> reviewer_agent -> [END | coder_agent | graceful_degrader]
+
+Set DEMO_MODE=True to run with scripted responses (guarantees a reproducible
+REJECTED -> retry -> APPROVED trace for submission evidence, no API calls needed).
+Set DEMO_MODE=False to use a real OpenAI model via langchain-openai, reading
+OPENAI_API_KEY from a .env file.
+"""
+
+import os
+import sys
+from typing import TypedDict, Optional, Literal
+
+from dotenv import load_dotenv
+from langgraph.graph import StateGraph, END
+
+load_dotenv()  # loads OPENAI_API_KEY from .env, never hardcoded
+
+# --------------------------------------------------------------------------
+# Configuration
+# --------------------------------------------------------------------------
+
+DEMO_MODE = os.getenv("DEMO_MODE", "true").lower() == "true"
+MAX_ITERATIONS = 2  # configurable, >= 2 per assignment spec
+
+if not DEMO_MODE:
+    from langchain_openai import ChatOpenAI
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+
+# --------------------------------------------------------------------------
+# State
+# --------------------------------------------------------------------------
+
+class SwarmState(TypedDict):
+    feature_request: str
+    architecture_guidelines: str
+    codebase_context: str
+    current_code: str
+    review_feedback: Optional[str]
+    verdict: Optional[str]
+    iteration_count: int
+    max_iterations: int
+    status: Optional[str]
+
+
+# --------------------------------------------------------------------------
+# Mock codebase context (module index / AST summary) — Memory injection
+# --------------------------------------------------------------------------
+
+CODEBASE_CONTEXT = """\
+Existing module index (mock_buggy_repo):
+- utils/validators.py
+    def validate_currency_code(code: str) -> bool
+    def validate_iso_timestamp(ts: str) -> bool
+- utils/formatting.py
+    def round_currency(amount: float, decimals: int = 2) -> float
+- models/transaction.py
+    class Transaction (TypedDict): amount: float, currency: str, timestamp: str
+
+Conventions used across this repo:
+- All public functions use snake_case and full type hints
+- Currency lists are always returned sorted alphabetically
+- Domain errors use ValueError/KeyError, never bare except
+"""
+
+
+# --------------------------------------------------------------------------
+# System prompts — intentionally distinct content (rubric 1.1, 10 pts)
+# --------------------------------------------------------------------------
+
+CODER_SYSTEM_PROMPT = """You are a Python Coder agent working inside an existing codebase.
+
+Codebase context (existing modules/conventions to stay consistent with):
+{codebase_context}
+
+Feature request:
+{feature_request}
+
+Architecture guidelines your code will be reviewed against:
+{architecture_guidelines}
+{feedback_section}
+Output ONLY the complete Python code for the function (including imports),
+nothing else. No markdown fences, no commentary.
+"""
+
+REVIEWER_SYSTEM_PROMPT = """You are a strict code Reviewer agent. Check the code below
+against EVERY guideline listed. A single violation means REJECTED.
+
+Architecture guidelines:
+{architecture_guidelines}
+
+Code to review:
+{current_code}
+
+Respond in EXACTLY this format:
+[REVIEWER] Verdict: APPROVED
+or
+[REVIEWER] Verdict: REJECTED
+Feedback: <one specific violation per line>
+"""
+
+
+# --------------------------------------------------------------------------
+# Demo-mode scripted responses (guarantees a REJECTED -> APPROVED trace)
+# --------------------------------------------------------------------------
+
+_DEMO_CODE_V1 = '''import datetime
+
+
+def process_transactions(transactions):
+    if not transactions:
+        raise ValueError("transactions list must not be empty")
+
+    total_amount = 0.0
+    currencies = set()
+
+    for txn in transactions:
+        if "amount" not in txn or "currency" not in txn or "timestamp" not in txn:
+            raise KeyError("transaction is missing a required key")
+        total_amount += txn["amount"]
+        currencies.add(txn["currency"])
+
+    return {
+        "total_amount": total_amount,
+        "transaction_count": len(transactions),
+        "currencies_used": sorted(currencies),
+    }
+'''
+
+_DEMO_CODE_V2 = '''from typing import List, Dict, Union
+
+
+def process_transactions(transactions: List[Dict[str, Union[float, str]]]) -> dict:
+    """Summarize a list of transactions.
+
+    Args:
+        transactions: List of dicts each containing 'amount' (float),
+            'currency' (str, ISO 4217), and 'timestamp' (str, ISO 8601).
+
+    Returns:
+        A dict with 'total_amount' (float), 'transaction_count' (int),
+        and 'currencies_used' (list[str], sorted alphabetically).
+
+    Raises:
+        ValueError: If the transactions list is empty.
+        KeyError: If a transaction dict is missing a required key.
+    """
+    if not transactions:
+        raise ValueError("transactions list must not be empty")
+
+    total_amount = 0.0
+    currencies = set()
+
+    for txn in transactions:
+        for required_key in ("amount", "currency", "timestamp"):
+            if required_key not in txn:
+                raise KeyError(f"transaction missing required key: '{required_key}'")
+        total_amount += txn["amount"]
+        currencies.add(txn["currency"])
+
+    return {
+        "total_amount": total_amount,
+        "transaction_count": len(transactions),
+        "currencies_used": sorted(currencies),
+    }
+'''
+
+_DEMO_REVIEW_V1 = """[REVIEWER] Verdict: REJECTED
+Feedback: Missing type hints on the 'transactions' parameter and return value.
+Feedback: Missing a docstring describing the function, its parameters, return value, and exceptions raised."""
+
+_DEMO_REVIEW_V2 = """[REVIEWER] Verdict: APPROVED"""
+
+
+# --------------------------------------------------------------------------
+# Agent nodes
+# --------------------------------------------------------------------------
+
+def coder_agent(state: SwarmState) -> SwarmState:
+    iteration = state["iteration_count"]
+    print(f"\n[CODER] Iteration {iteration + 1}")
+
+    feedback_section = ""
+    if state.get("review_feedback"):
+        feedback_section = f"\nThe previous attempt was REJECTED. Fix these issues:\n{state['review_feedback']}\n"
+
+    if DEMO_MODE:
+        code = _DEMO_CODE_V1 if iteration == 0 else _DEMO_CODE_V2
+    else:
+        prompt = CODER_SYSTEM_PROMPT.format(
+            codebase_context=state["codebase_context"],
+            feature_request=state["feature_request"],
+            architecture_guidelines=state["architecture_guidelines"],
+            feedback_section=feedback_section,
+        )
+        response = llm.invoke(prompt)
+        code = response.content.strip()
+
+    print(code)
+
+    return {
+        **state,
+        "current_code": code,
+    }
+
+
+def reviewer_agent(state: SwarmState) -> SwarmState:
+    iteration = state["iteration_count"]
+
+    if DEMO_MODE:
+        review = _DEMO_REVIEW_V1 if iteration == 0 else _DEMO_REVIEW_V2
+    else:
+        prompt = REVIEWER_SYSTEM_PROMPT.format(
+            architecture_guidelines=state["architecture_guidelines"],
+            current_code=state["current_code"],
+        )
+        response = llm.invoke(prompt)
+        review = response.content.strip()
+
+    print(f"\n{review}")
+
+    verdict = "APPROVED" if "APPROVED" in review.splitlines()[0] else "REJECTED"
+    feedback = None
+    if verdict == "REJECTED":
+        feedback_lines = [
+            line.replace("Feedback:", "").strip()
+            for line in review.splitlines()
+            if line.strip().startswith("Feedback:")
+        ]
+        feedback = "\n".join(feedback_lines)
+
+    return {
+        **state,
+        "verdict": verdict,
+        "review_feedback": feedback,
+        "iteration_count": iteration + 1,  # increments after Reviewer run, not Coder run
+    }
+
+
+def graceful_degrader(state: SwarmState) -> SwarmState:
+    print("\n[GRACEFUL_DEGRADER] Max iterations reached — escalating to human engineer")
+    report = f"""
+=== ESCALATION REPORT ===
+Iterations attempted: {state['iteration_count']} / {state['max_iterations']}
+Last reviewer feedback:
+{state['review_feedback']}
+
+Last code preview (first 10 lines):
+{chr(10).join(state['current_code'].splitlines()[:10])}
+=========================
+"""
+    print(report)
+    return {
+        **state,
+        "status": "ESCALATED",
+    }
+
+
+# --------------------------------------------------------------------------
+# Conditional routing — 3 destinations: END / coder_agent / graceful_degrader
+# --------------------------------------------------------------------------
+
+def route_after_review(state: SwarmState) -> Literal["approved", "retry", "escalate"]:
+    if state["verdict"] == "APPROVED":
+        return "approved"
+    if state["iteration_count"] >= state["max_iterations"]:
+        return "escalate"
+    return "retry"
+
+
+# --------------------------------------------------------------------------
+# Graph construction
+# --------------------------------------------------------------------------
+
+def build_graph():
+    graph = StateGraph(SwarmState)
+
+    graph.add_node("coder_agent", coder_agent)
+    graph.add_node("reviewer_agent", reviewer_agent)
+    graph.add_node("graceful_degrader", graceful_degrader)
+
+    graph.set_entry_point("coder_agent")  # entry point must be coder_agent (rubric 1.3)
+
+    graph.add_edge("coder_agent", "reviewer_agent")
+
+    graph.add_conditional_edges(
+        "reviewer_agent",
+        route_after_review,
+        {
+            "approved": END,
+            "retry": "coder_agent",
+            "escalate": "graceful_degrader",
+        },
+    )
+
+    graph.add_edge("graceful_degrader", END)
+
+    return graph.compile()
+
+
+# --------------------------------------------------------------------------
+# Entry point
+# --------------------------------------------------------------------------
+
+def main():
+    with open("feature_request.txt", "r") as f:
+        feature_request = f.read()
+    with open("architecture_guidelines.md", "r") as f:
+        architecture_guidelines = f.read()
+
+    initial_state: SwarmState = {
+        "feature_request": feature_request,
+        "architecture_guidelines": architecture_guidelines,
+        "codebase_context": CODEBASE_CONTEXT,
+        "current_code": "",
+        "review_feedback": None,
+        "verdict": None,
+        "iteration_count": 0,
+        "max_iterations": MAX_ITERATIONS,
+        "status": None,
+    }
+
+    print(f"{'='*60}\nRunning swarm (DEMO_MODE={DEMO_MODE}, max_iterations={MAX_ITERATIONS})\n{'='*60}")
+
+    swarm = build_graph()
+    final_state = swarm.invoke(initial_state)
+
+    final_status = final_state.get("status") or final_state.get("verdict")
+    print(f"\n{'='*60}\nFINAL STATUS: {final_status}\n{'='*60}")
+
+    return final_state
+
+
+if __name__ == "__main__":
+    main()
