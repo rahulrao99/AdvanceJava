@@ -1,0 +1,76 @@
+============================================================
+Running swarm (DEMO_MODE=True, max_iterations=2)
+============================================================
+
+[CODER] Iteration 1
+import datetime
+
+
+def process_transactions(transactions):
+    if not transactions:
+        raise ValueError("transactions list must not be empty")
+
+    total_amount = 0.0
+    currencies = set()
+
+    for txn in transactions:
+        if "amount" not in txn or "currency" not in txn or "timestamp" not in txn:
+            raise KeyError("transaction is missing a required key")
+        total_amount += txn["amount"]
+        currencies.add(txn["currency"])
+
+    return {
+        "total_amount": total_amount,
+        "transaction_count": len(transactions),
+        "currencies_used": sorted(currencies),
+    }
+
+
+[REVIEWER] Verdict: REJECTED
+Feedback: Missing type hints on the 'transactions' parameter and return value.
+Feedback: Missing a docstring describing the function, its parameters, return value, and exceptions raised.
+
+[CODER] Iteration 2
+from typing import List, Dict, Union
+
+
+def process_transactions(transactions: List[Dict[str, Union[float, str]]]) -> dict:
+    """Summarize a list of transactions.
+
+    Args:
+        transactions: List of dicts each containing 'amount' (float),
+            'currency' (str, ISO 4217), and 'timestamp' (str, ISO 8601).
+
+    Returns:
+        A dict with 'total_amount' (float), 'transaction_count' (int),
+        and 'currencies_used' (list[str], sorted alphabetically).
+
+    Raises:
+        ValueError: If the transactions list is empty.
+        KeyError: If a transaction dict is missing a required key.
+    """
+    if not transactions:
+        raise ValueError("transactions list must not be empty")
+
+    total_amount = 0.0
+    currencies = set()
+
+    for txn in transactions:
+        for required_key in ("amount", "currency", "timestamp"):
+            if required_key not in txn:
+                raise KeyError(f"transaction missing required key: '{required_key}'")
+        total_amount += txn["amount"]
+        currencies.add(txn["currency"])
+
+    return {
+        "total_amount": total_amount,
+        "transaction_count": len(transactions),
+        "currencies_used": sorted(currencies),
+    }
+
+
+[REVIEWER] Verdict: APPROVED
+
+============================================================
+FINAL STATUS: APPROVED
+============================================================
