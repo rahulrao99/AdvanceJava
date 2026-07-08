@@ -1,0 +1,37 @@
+# Reasoning — Coder-Reviewer Swarm
+
+## Approach
+A two-node LangGraph: `coder_agent` writes code, `reviewer_agent` checks it
+against `architecture_guidelines.md`. On REJECTED, feedback is fed back into
+the Coder's next prompt. After `max_iterations` (set to 2) with no APPROVED,
+the swarm routes to `graceful_degrader` instead of looping forever.
+
+## State
+One flat `SwarmState` TypedDict shared by both nodes — feature request,
+guidelines, codebase context, current code, feedback, verdict, iteration
+count, and final status. Flat instead of nested so every node can read/write
+it directly.
+
+## Key design decisions
+- **`iteration_count` increments in `reviewer_agent`, not `coder_agent`** —
+  an iteration means "one full Coder→Reviewer round," so it only counts once
+  a verdict exists.
+- **Escalation is its own node** (`graceful_degrader`), separate from the
+  router — keeps "decide where to go" and "generate the report" separate.
+- **Feedback injection** — `review_feedback` is folded into the Coder's next
+  prompt as an optional section, empty on the first try, filled on retries.
+  This is what actually drives the Coder to fix real issues on Iteration 2.
+- **`codebase_context` is a hardcoded mock** (module index with real function
+  signatures) since the rubric allows this and treats live ChromaDB retrieval
+  as a stretch goal only. It's re-read from state on every Coder call, not
+  just the first.
+- **`DEMO_MODE` flag** — defaults to `true`, using scripted Coder/Reviewer
+  responses so the trace log is reproducible without depending on API/network
+  access. Set `DEMO_MODE=false` to run the same graph against a real
+  `ChatOpenAI` call, key loaded from `.env`.
+
+## Testing
+Ran the default demo flow (`trace_log.txt` — REJECTED → Iteration 2 →
+APPROVED). Separately forced every Reviewer call to REJECTED to confirm the
+graceful degrader fires at the iteration limit with no infinite loop, and
+that its report includes iteration count, last feedback, and a code preview.
