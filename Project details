@@ -1,0 +1,54 @@
+Here are shorter versions for each section:
+
+---
+
+## Delivery & Process
+```
+Developed a Vehicle Parking Management System using Java 21 
+and Spring Boot 3.2.5 with 8 microservices. Followed 
+structured development — schema design with 13 tables, 
+service-by-service implementation, and API testing via 
+Postman. Used Git with conventional commits throughout. 
+Delivered all 16 functional criteria including pagination, 
+caching, scheduling, inter-service communication, and 
+event-driven notifications.
+```
+
+---
+
+## Business Communication
+```
+Integrated Swagger UI in each service for API documentation. 
+Created a Postman collection with 31 endpoints and auto-save 
+scripts. Added MDC-based trace logging with unique request 
+IDs across all services for debugging and observability.
+```
+
+---
+
+## Leadership & Organisation Contribution
+```
+Took complete ownership from design to delivery. Made 
+independent architectural decisions — JdbcTemplate over JPA, 
+Strategy pattern for Haversine gate calculation, and Kafka 
+for async communication. Proactively added Redis caching, 
+scheduled occupancy reports, email notifications, and PDF 
+receipt generation beyond basic requirements.
+```
+
+---
+
+## Role Expertise
+```
+Built production-grade microservices with JWT authentication 
+and 4 roles. Applied 10 design patterns — Singleton, Strategy, 
+Builder, Observer, Repository and more. Used FeignClient for 
+synchronous and Kafka for asynchronous inter-service 
+communication. Added Redis caching, Spring Scheduler, and 
+JUnit 5 + Mockito unit tests. Stack: Java 21, Spring Boot, 
+Spring Security, MySQL, Redis, Kafka, Maven multi-module.
+```
+
+---
+
+**Copy and paste each into the form!** 🚀
